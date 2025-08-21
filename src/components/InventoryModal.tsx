@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Plus, Minus, RotateCcw } from 'lucide-react'
-import { Inventory, Product, Location } from '@/types'
+import { X, Plus, Minus, RotateCcw, ArrowRightLeft } from 'lucide-react'
+import { Inventory, Product, Location, User } from '@/types'
 
 interface InventoryModalProps {
   isOpen: boolean
@@ -10,7 +10,7 @@ interface InventoryModalProps {
   inventory: Inventory | null
   products: Product[]
   locations: Location[]
-  userRole: 'master' | 'general'
+  user: User
   onSuccess: () => void
 }
 
@@ -20,16 +20,19 @@ export default function InventoryModal({
   inventory,
   products,
   locations,
-  userRole,
+  user,
   onSuccess
 }: InventoryModalProps) {
   const [formData, setFormData] = useState({
     product_id: '',
     location_id: '',
-    movement_type: 'in' as 'in' | 'out' | 'adjustment',
+    batch_code: '',
+    movement_type: 'in' as 'in' | 'out' | 'adjustment' | 'transfer' | 'request',
     quantity: 0,
     movement_date: new Date().toISOString().split('T')[0],
-    notes: ''
+    notes: '',
+    to_location_id: '', // transfer용
+    reason: '' // request용
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
@@ -39,13 +42,16 @@ export default function InventoryModal({
       setFormData({
         product_id: inventory.product_id,
         location_id: inventory.location_id,
-        movement_type: 'in',
+        batch_code: inventory.batch_code || '',
+        movement_type: user.role === 'master' ? 'transfer' : 'request',
         quantity: 0,
         movement_date: new Date().toISOString().split('T')[0],
-        notes: ''
+        notes: '',
+        to_location_id: '',
+        reason: ''
       })
     }
-  }, [inventory, isOpen])
+  }, [inventory, isOpen, user.role])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -57,22 +63,92 @@ export default function InventoryModal({
         throw new Error('제품과 위치를 선택해주세요.')
       }
 
+      if (!formData.batch_code) {
+        throw new Error('배치코드를 입력해주세요.')
+      }
+
       if (formData.quantity <= 0) {
         throw new Error('수량은 0보다 커야 합니다.')
       }
 
-      // API 호출
-      const response = await fetch('/api/inventory/movement', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      })
+      // 요청 타입인 경우 (일반 계정)
+      if (formData.movement_type === 'request') {
+        if (!formData.to_location_id) {
+          throw new Error('이동할 위치를 선택해주세요.')
+        }
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || '재고 이동 중 오류가 발생했습니다.')
+        const response = await fetch('/api/transfer-requests', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            product_id: formData.product_id,
+            from_location_id: formData.location_id,
+            to_location_id: formData.to_location_id,
+            batch_code: formData.batch_code,
+            quantity: formData.quantity,
+            reason: formData.reason,
+            requested_by: user.username
+          })
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || '요청 생성에 실패했습니다.')
+        }
+
+        const result = await response.json()
+        alert(result.message || '이동 요청이 생성되었습니다.')
+        
+      } else if (formData.movement_type === 'transfer' && user.role === 'master') {
+        // 마스터 계정의 즉시 이동
+        if (!formData.to_location_id) {
+          throw new Error('이동할 위치를 선택해주세요.')
+        }
+
+        const response = await fetch('/api/inventory/transfer', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            product_id: formData.product_id,
+            from_location_id: formData.location_id,
+            to_location_id: formData.to_location_id,
+            batch_code: formData.batch_code,
+            quantity: formData.quantity,
+            movement_date: formData.movement_date,
+            notes: formData.notes,
+            username: user.username
+          })
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || '이동에 실패했습니다.')
+        }
+      } else {
+        // 일반 재고 입출고 (마스터만)
+        if (user.role !== 'master') {
+          throw new Error('권한이 없습니다.')
+        }
+
+        const response = await fetch('/api/inventory/movement', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...formData,
+            username: user.username
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || '재고 이동 중 오류가 발생했습니다.')
+        }
       }
 
       onSuccess()
@@ -82,10 +158,13 @@ export default function InventoryModal({
       setFormData({
         product_id: '',
         location_id: '',
-        movement_type: 'in',
+        batch_code: '',
+        movement_type: user.role === 'master' ? 'transfer' : 'request',
         quantity: 0,
         movement_date: new Date().toISOString().split('T')[0],
-        notes: ''
+        notes: '',
+        to_location_id: '',
+        reason: ''
       })
 
     } catch (err) {
@@ -97,7 +176,7 @@ export default function InventoryModal({
 
   if (!isOpen) return null
 
-  const selectedProduct = products.find(p => p.id === formData.product_id)
+  const selectedProduct = products.find(p => p.name === formData.product_id)
   const currentInventoryItem = inventory && inventory.product_id === formData.product_id && inventory.location_id === formData.location_id
     ? inventory
     : null
@@ -108,7 +187,7 @@ export default function InventoryModal({
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b">
           <h3 className="text-lg font-semibold text-gray-900">
-            재고 이동 등록
+            {user.role === 'master' ? '재고 관리' : '제품 이동 요청'}
           </h3>
           <button
             onClick={onClose}
@@ -132,8 +211,8 @@ export default function InventoryModal({
               className="select-field"
             >
               <option value="">제품을 선택하세요</option>
-              {products.map(product => (
-                <option key={product.id} value={product.id}>
+              {products.map((product, index) => (
+                <option key={product.id || `product-${index}`} value={product.name}>
                   {product.name} ({product.category?.name})
                 </option>
               ))}
@@ -143,7 +222,7 @@ export default function InventoryModal({
           {/* 위치 선택 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              위치 <span className="text-red-500">*</span>
+              {user.role === 'master' ? '위치' : '출발 위치'} <span className="text-red-500">*</span>
             </label>
             <select
               value={formData.location_id}
@@ -154,11 +233,27 @@ export default function InventoryModal({
             >
               <option value="">위치를 선택하세요</option>
               {locations.map(location => (
-                <option key={location.id} value={location.id}>
+                <option key={location.name} value={location.name}>
                   {location.name}
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* 배치코드 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              배치코드 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.batch_code}
+              onChange={(e) => setFormData({ ...formData, batch_code: e.target.value })}
+              required
+              disabled={!!inventory}
+              className="input-field font-mono"
+              placeholder="예: 4030, 4030A"
+            />
           </div>
 
           {/* 현재고 표시 */}
@@ -176,7 +271,7 @@ export default function InventoryModal({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               이동 타입 <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={() => setFormData({ ...formData, movement_type: 'in' })}
@@ -213,8 +308,44 @@ export default function InventoryModal({
                 <RotateCcw className="w-4 h-4 mr-1" />
                 조정
               </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, movement_type: 'transfer', to_location_id: '' })}
+                className={`flex items-center justify-center p-3 rounded-md border text-sm font-medium ${
+                  formData.movement_type === 'transfer'
+                    ? 'bg-orange-500 text-white border-orange-500'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <ArrowRightLeft className="w-4 h-4 mr-1" />
+                이동
+              </button>
             </div>
           </div>
+
+          {/* Transfer 목적지 위치 선택 */}
+          {formData.movement_type === 'transfer' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                이동할 위치 <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.to_location_id}
+                onChange={(e) => setFormData({ ...formData, to_location_id: e.target.value })}
+                required={formData.movement_type === 'transfer'}
+                className="select-field"
+              >
+                <option value="">이동할 위치를 선택하세요</option>
+                {locations
+                  .filter(location => location.name !== formData.location_id)
+                  .map(location => (
+                    <option key={location.name} value={location.name}>
+                      {location.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
 
           {/* 수량 */}
           <div>

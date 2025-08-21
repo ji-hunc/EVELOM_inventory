@@ -91,11 +91,20 @@ export default function LoginForm() {
 
           <div className="mt-6 text-center">
             <div className="text-xs text-gray-500 space-y-1">
-              <p><strong>계정 정보:</strong></p>
-              <p>마스터: master / evelom2024</p>
-              <p>창고: 창고_evelom / evelom2024</p>
-              <p>청량리: 청량리_evelom / evelom2024</p>
-              <p>AK: AK_evelom / evelom2024</p>
+              <p><strong>🔐 테스트 계정 정보:</strong></p>
+              <div className="bg-gray-50 p-3 rounded mt-2 text-left">
+                <p><strong>마스터 계정:</strong></p>
+                <p>• ID: master_admin</p>
+                <p>• PW: admin123</p>
+                <br />
+                <p><strong>일반 계정:</strong></p>
+                <p>• 청량리: 청량리_evelom / cheonglyangni123</p>
+                <p>• AK: AK_evelom / ak123</p>
+                <p>• 창고: 창고_evelom / warehouse123</p>
+              </div>
+              <p className="text-red-500 mt-2">
+                ⚠️ 데이터베이스에서 update-passwords-only.sql 실행 필요
+              </p>
             </div>
           </div>
         </div>

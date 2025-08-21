@@ -42,7 +42,7 @@ export async function createUser(userData: {
   username: string
   password: string
   role: 'master' | 'general'
-  location?: string
+  assigned_location_id?: string
   alert_threshold?: number
 }): Promise<User | null> {
   try {
@@ -55,7 +55,7 @@ export async function createUser(userData: {
           username: userData.username,
           password_hash: hashedPassword,
           role: userData.role,
-          location: userData.location,
+          assigned_location_id: userData.assigned_location_id,
           alert_threshold: userData.alert_threshold || 30
         }
       ])

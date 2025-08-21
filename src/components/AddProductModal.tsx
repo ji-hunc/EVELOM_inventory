@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Plus, Upload, Image as ImageIcon } from 'lucide-react'
+import { X, Plus, Upload, Image as ImageIcon, Package } from 'lucide-react'
 import { Category, Location } from '@/types'
 
 interface AddProductModalProps {
@@ -22,9 +22,11 @@ export default function AddProductModal({
   const [formData, setFormData] = useState({
     name: '',
     category_id: '',
+    code: '',
+    unit: 'EA',
     description: '',
     image_url: '',
-    initial_stock: {} as Record<string, number>
+    initial_stocks: [] as { location_id: string; batch_code: string; quantity: number }[]
   })
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState('')
@@ -56,14 +58,26 @@ export default function AddProductModal({
     }
   }
 
-  const handleStockChange = (locationId: string, value: string) => {
-    const numValue = parseInt(value) || 0
+  const addStockEntry = () => {
     setFormData(prev => ({
       ...prev,
-      initial_stock: {
-        ...prev.initial_stock,
-        [locationId]: numValue
-      }
+      initial_stocks: [...prev.initial_stocks, { location_id: '', batch_code: '', quantity: 0 }]
+    }))
+  }
+
+  const removeStockEntry = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      initial_stocks: prev.initial_stocks.filter((_, i) => i !== index)
+    }))
+  }
+
+  const updateStockEntry = (index: number, field: keyof typeof formData.initial_stocks[0], value: string | number) => {
+    setFormData(prev => ({
+      ...prev,
+      initial_stocks: prev.initial_stocks.map((stock, i) => 
+        i === index ? { ...stock, [field]: value } : stock
+      )
     }))
   }
 
@@ -114,9 +128,13 @@ export default function AddProductModal({
         body: JSON.stringify({
           name: formData.name.trim(),
           category_id: formData.category_id,
+          code: formData.code.trim(),
+          unit: formData.unit,
           description: formData.description.trim(),
           image_url: imageUrl,
-          initial_stock: formData.initial_stock
+          initial_stocks: formData.initial_stocks.filter(stock => 
+            stock.location_id && stock.batch_code && stock.quantity > 0
+          )
         })
       })
 
@@ -129,9 +147,11 @@ export default function AddProductModal({
       setFormData({
         name: '',
         category_id: '',
+        code: '',
+        unit: 'EA',
         description: '',
         image_url: '',
-        initial_stock: {}
+        initial_stocks: []
       })
       setImageFile(null)
       setImagePreview('')
@@ -150,9 +170,11 @@ export default function AddProductModal({
     setFormData({
       name: '',
       category_id: '',
+      code: '',
+      unit: 'EA',
       description: '',
       image_url: '',
-      initial_stock: {}
+      initial_stocks: []
     })
     setImageFile(null)
     setImagePreview('')
@@ -206,11 +228,44 @@ export default function AddProductModal({
                 required
               >
                 <option value="">카테고리 선택</option>
-                {categories.map(category => (
-                  <option key={category.id} value={category.id}>
+                {categories.map((category, index) => (
+                  <option key={category.id || `category-${index}`} value={category.id}>
                     {category.name}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                제품 코드
+              </label>
+              <input
+                type="text"
+                value={formData.code}
+                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                className="input-field"
+                placeholder="제품 코드 (선택사항)"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                단위 *
+              </label>
+              <select
+                value={formData.unit}
+                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                className="select-field"
+                required
+              >
+                <option value="EA">개</option>
+                <option value="KG">kg</option>
+                <option value="L">L</option>
+                <option value="ML">ml</option>
+                <option value="G">g</option>
+                <option value="BOX">박스</option>
+                <option value="SET">세트</option>
               </select>
             </div>
           </div>
@@ -286,28 +341,95 @@ export default function AddProductModal({
 
           {/* 초기 재고 설정 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              위치별 초기 재고
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {locations.map(location => (
-                <div key={location.id}>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">
-                    {location.name}
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.initial_stock[location.id] || 0}
-                    onChange={(e) => handleStockChange(location.id, e.target.value)}
-                    className="input-field"
-                    min="0"
-                    placeholder="0"
-                  />
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-4">
+              <label className="block text-sm font-medium text-gray-700">
+                초기 재고 설정 (배치별)
+              </label>
+              <button
+                type="button"
+                onClick={addStockEntry}
+                className="btn-secondary text-sm flex items-center gap-1"
+              >
+                <Plus className="w-4 h-4" />
+                배치 추가
+              </button>
             </div>
+            
+            {formData.initial_stocks.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                <Package className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                <p>초기 재고가 없습니다.</p>
+                <p className="text-sm">필요시 "배치 추가" 버튼을 클릭하세요.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {formData.initial_stocks.map((stock, index) => (
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 border border-gray-200 rounded-lg">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        위치
+                      </label>
+                      <select
+                        value={stock.location_id}
+                        onChange={(e) => updateStockEntry(index, 'location_id', e.target.value)}
+                        className="select-field text-sm"
+                        required
+                      >
+                        <option value="">위치 선택</option>
+                        {locations.map(location => (
+                          <option key={location.id} value={location.name}>
+                            {location.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        배치코드
+                      </label>
+                      <input
+                        type="text"
+                        value={stock.batch_code}
+                        onChange={(e) => updateStockEntry(index, 'batch_code', e.target.value)}
+                        className="input-field text-sm"
+                        placeholder="예: 4030, 4030A"
+                        required
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        수량
+                      </label>
+                      <input
+                        type="number"
+                        value={stock.quantity}
+                        onChange={(e) => updateStockEntry(index, 'quantity', parseInt(e.target.value) || 0)}
+                        className="input-field text-sm"
+                        min="0"
+                        placeholder="0"
+                        required
+                      />
+                    </div>
+                    
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={() => removeStockEntry(index)}
+                        className="text-red-600 hover:text-red-800 p-2"
+                        title="삭제"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
             <p className="text-xs text-gray-500 mt-2">
-              각 위치별 초기 재고량을 설정하세요. 0으로 두면 재고 없음으로 시작됩니다.
+              배치코드 형식: 첫 자리(생산연도) + 3자리(일련번호) + 선택적 알파벳 (예: 4030, 4030A)
             </p>
           </div>
 

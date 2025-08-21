@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export async function GET(request: NextRequest) {
   try {
-    // 위치 데이터 로드
+    // 위치 데이터 로드 (모든 사용자가 볼 수 있도록)
     const { data: locations, error: locationsError } = await supabaseAdmin
       .from('locations')
       .select('*')
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       throw productsError
     }
 
-    // 재고 데이터 로드
+    // 재고 데이터 로드 (모든 재고 반환, 프론트엔드에서 필터링)
     const { data: inventory, error: inventoryError } = await supabaseAdmin
       .from('inventory')
       .select(`

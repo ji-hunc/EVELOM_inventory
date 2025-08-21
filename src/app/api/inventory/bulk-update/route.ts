@@ -5,6 +5,7 @@ interface UpdateItem {
   itemId: string
   productId: string
   locationId: string
+  batchCode?: string
   oldStock: number
   newStock: number
   difference: number
@@ -12,7 +13,7 @@ interface UpdateItem {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { updates }: { updates: UpdateItem[] } = await request.json()
+    const { updates, username }: { updates: UpdateItem[]; username: string } = await request.json()
 
     if (!updates || !Array.isArray(updates) || updates.length === 0) {
       return NextResponse.json(
@@ -28,7 +29,8 @@ export async function PUT(request: NextRequest) {
         .from('inventory')
         .update({
           current_stock: update.newStock,
-          last_updated: new Date().toISOString()
+          last_updated: new Date().toISOString(),
+          last_modified_by: username
         })
         .eq('id', update.itemId)
 
@@ -40,19 +42,21 @@ export async function PUT(request: NextRequest) {
         )
       }
 
-      // 2. 재고 이동 기록 추가
+      // 2. 재고 이동 기록 추가 (배치코드 포함)
       const movementType = update.difference > 0 ? 'in' : update.difference < 0 ? 'out' : 'adjustment'
       const { error: movementError } = await supabaseAdmin
         .from('inventory_movements')
         .insert({
           product_id: update.productId,
           location_id: update.locationId,
+          batch_code: update.batchCode || null,
           movement_type: movementType,
           quantity: Math.abs(update.difference),
           previous_stock: update.oldStock,
           new_stock: update.newStock,
           movement_date: new Date().toISOString().split('T')[0],
-          notes: '일괄 재고 수정'
+          notes: '일괄 재고 수정',
+          modified_by: username
         })
 
       if (movementError) {

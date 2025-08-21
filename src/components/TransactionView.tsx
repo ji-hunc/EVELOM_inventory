@@ -216,8 +216,8 @@ export default function TransactionView({
               className="select-field"
             >
               <option value="all">전체</option>
-              {categories.map(category => (
-                <option key={category.id} value={category.id}>
+              {categories.map((category, index) => (
+                <option key={category.id || `category-${index}`} value={category.id}>
                   {category.name}
                 </option>
               ))}
@@ -235,8 +235,8 @@ export default function TransactionView({
               className="select-field"
             >
               <option value="all">전체</option>
-              {products.map(product => (
-                <option key={product.id} value={product.id}>
+              {products.map((product, index) => (
+                <option key={product.id || `product-${index}`} value={product.id}>
                   {product.name}
                 </option>
               ))}

@@ -70,14 +70,23 @@ export default function StatsPage() {
 
       // API를 통해 데이터 로드
       const [inventoryResponse, movementsResponse] = await Promise.all([
-        fetch('/api/inventory'),
+        fetch(`/api/inventory${user ? `?userId=${user.username}` : ''}`),
         fetch(`/api/movements?start_date=${startDateStr}`)
       ])
 
-      const { data: inventoryData } = await inventoryResponse.json()
-      const { movements: allMovements } = await movementsResponse.json()
+      if (!inventoryResponse.ok || !movementsResponse.ok) {
+        console.error('API 응답 오류:', {
+          inventory: inventoryResponse.status,
+          movements: movementsResponse.status
+        })
+        return
+      }
+
+      const inventoryData = await inventoryResponse.json()
+      const movementsData = await movementsResponse.json()
 
       const inventory = inventoryData.inventory || []
+      const allMovements = movementsData.movements || []
       const inboundMovements = allMovements.filter((m: any) => m.movement_type === 'in')
       const outboundMovements = allMovements.filter((m: any) => m.movement_type === 'out')
       const recentMovements = allMovements.slice(0, 10)

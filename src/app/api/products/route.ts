@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, category_id, description, image_url, initial_stock } = await request.json()
+    const { name, category_id, description, image_url, code, unit, initial_stocks } = await request.json()
 
     // 입력 유효성 검사
     if (!name?.trim()) {
@@ -26,8 +26,10 @@ export async function POST(request: NextRequest) {
       .insert({
         name: name.trim(),
         category_id,
+        code: code?.trim() || null,
         description: description?.trim() || null,
-        image_url: image_url || null
+        image_url: image_url || null,
+        unit: unit?.trim() || 'EA'
       })
       .select()
       .single()
@@ -35,57 +37,57 @@ export async function POST(request: NextRequest) {
     if (productError) {
       console.error('Product creation error:', productError)
       return NextResponse.json(
-        { error: '제품 추가에 실패했습니다.' },
+        { error: '제품 추가에 실패했습니다.', details: productError.message },
         { status: 500 }
       )
     }
 
-    // 2. 모든 위치에 재고 항목 생성 (초기값 0 또는 설정된 값)
-    // 먼저 모든 위치 목록을 가져옴
-    const { data: locations, error: locationsError } = await supabaseAdmin
-      .from('locations')
-      .select('id')
-
-    if (locationsError) {
-      console.error('Locations fetch error:', locationsError)
-      return NextResponse.json(
-        { error: '위치 정보를 가져오는데 실패했습니다.' },
-        { status: 500 }
-      )
+    // 2. 위치별 초기 재고가 있는 경우만 인벤토리 생성
+    let inventoryInserts: any[] = []
+    
+    if (initial_stocks && Array.isArray(initial_stocks)) {
+      for (const stockInfo of initial_stocks) {
+        const { location_id, batch_code, quantity } = stockInfo
+        
+        if (quantity > 0 && location_id && batch_code) {
+          inventoryInserts.push({
+            product_id: product.name, // name을 FK로 사용
+            location_id,
+            batch_code,
+            current_stock: quantity
+          })
+        }
+      }
     }
 
-    // 모든 위치에 재고 항목 생성
-    const inventoryInserts = locations.map(location => ({
-      product_id: product.id,
-      location_id: location.id,
-      current_stock: initial_stock?.[location.id] || 0
-    }))
+    // 인벤토리 항목이 있는 경우에만 삽입
+    if (inventoryInserts.length > 0) {
+      const { error: inventoryError } = await supabaseAdmin
+        .from('inventory')
+        .insert(inventoryInserts)
 
-    const { error: inventoryError } = await supabaseAdmin
-      .from('inventory')
-      .insert(inventoryInserts)
+      if (inventoryError) {
+        console.error('Inventory creation error:', inventoryError)
+        return NextResponse.json(
+          { error: '재고 설정에 실패했습니다.', details: inventoryError.message },
+          { status: 500 }
+        )
+      }
 
-    if (inventoryError) {
-      console.error('Inventory creation error:', inventoryError)
-      // 제품은 이미 생성되었으므로, 재고만 실패한 경우 경고와 함께 성공 처리
-      console.warn('Product created but inventory setup failed')
-    }
-
-    // 3. 0보다 큰 재고에 대해서만 초기 이동 기록 추가 (입고)
-    const movementInserts = inventoryInserts
-      .filter(item => item.current_stock > 0)
-      .map(item => ({
-        product_id: product.id,
+      // 3. 초기 재고에 대한 이동 기록 추가
+      const movementInserts = inventoryInserts.map(item => ({
+        product_id: product.name,
         location_id: item.location_id,
+        batch_code: item.batch_code,
         movement_type: 'in' as const,
         quantity: item.current_stock,
         previous_stock: 0,
         new_stock: item.current_stock,
         movement_date: new Date().toISOString().split('T')[0],
-        notes: '신규 제품 등록 - 초기 재고'
+        notes: '신규 제품 등록 - 초기 재고',
+        modifier: 'system'
       }))
 
-    if (movementInserts.length > 0) {
       const { error: movementError } = await supabaseAdmin
         .from('inventory_movements')
         .insert(movementInserts)
