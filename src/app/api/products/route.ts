@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getKoreanTime } from '@/lib/date-utils'
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, category_id, description, image_url, code, unit, initial_stocks } = await request.json()
+    const { name, category_id, description, image_url, code, initial_stocks } = await request.json()
 
     // 입력 유효성 검사
     if (!name?.trim()) {
@@ -29,7 +30,6 @@ export async function POST(request: NextRequest) {
         code: code?.trim() || null,
         description: description?.trim() || null,
         image_url: image_url || null,
-        unit: unit?.trim() || 'EA'
       })
       .select()
       .single()
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
         quantity: item.current_stock,
         previous_stock: 0,
         new_stock: item.current_stock,
-        movement_date: new Date().toISOString().split('T')[0],
+        movement_date: getKoreanTime().split('T')[0],
         notes: '신규 제품 등록 - 초기 재고',
         modifier: 'system'
       }))

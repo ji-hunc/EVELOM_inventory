@@ -1,6 +1,6 @@
 export interface User {
   username: string  // PK
-  role: 'master' | 'general'
+  role: 'master' | 'general' | 'readonly'
   location?: string
   assigned_location_id?: string  // FK to locations.name
   alert_threshold: number

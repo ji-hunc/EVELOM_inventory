@@ -11,7 +11,15 @@ export async function GET(request: NextRequest) {
     const productId = searchParams.get('product_id')
     const categoryId = searchParams.get('category_id')
     const searchQuery = searchParams.get('search')
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '50')
 
+    // 전체 카운트 조회용 쿼리
+    let countQuery = supabaseAdmin
+      .from('inventory_movements')
+      .select('id', { count: 'exact', head: true })
+
+    // 데이터 조회용 쿼리
     let query = supabaseAdmin
       .from('inventory_movements')
       .select(`
@@ -27,33 +35,45 @@ export async function GET(request: NextRequest) {
         created_at
       `)
       .order('created_at', { ascending: false })
-      .limit(1000)
 
-    // 필터 적용
+    // 필터 적용 (countQuery와 query에 동일하게 적용)
     if (locationId && locationId !== 'all') {
       query = query.eq('location_id', locationId)
+      countQuery = countQuery.eq('location_id', locationId)
     }
 
     if (startDate) {
       query = query.gte('movement_date', startDate)
+      countQuery = countQuery.gte('movement_date', startDate)
     }
 
     if (endDate) {
       query = query.lte('movement_date', endDate)
+      countQuery = countQuery.lte('movement_date', endDate)
     }
 
     if (movementType && movementType !== 'all') {
       query = query.eq('movement_type', movementType)
+      countQuery = countQuery.eq('movement_type', movementType)
     }
 
     if (productId && productId !== 'all') {
       query = query.eq('product_id', productId)
+      countQuery = countQuery.eq('product_id', productId)
     }
 
-    const { data: movements, error } = await query
+    // 페이지네이션 적용
+    const offset = (page - 1) * limit
+    query = query.range(offset, offset + limit - 1)
 
-    if (error) {
-      console.error('Movements fetch error:', error)
+    // 카운트와 데이터 동시 조회
+    const [{ count: totalCount, error: countError }, { data: movements, error }] = await Promise.all([
+      countQuery,
+      query
+    ])
+
+    if (error || countError) {
+      console.error('Movements fetch error:', error || countError)
       return NextResponse.json(
         { error: 'Failed to fetch movements' },
         { status: 500 }
@@ -115,9 +135,19 @@ export async function GET(request: NextRequest) {
       } : null
     }))
 
+    const totalPages = Math.ceil(totalCount / limit)
+
     return NextResponse.json({
       success: true,
-      movements: filteredMovements
+      movements: filteredMovements,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
     })
 
   } catch (error) {

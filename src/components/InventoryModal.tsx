@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, Plus, Minus, RotateCcw, ArrowRightLeft } from 'lucide-react'
+import { X, Plus, Minus, RotateCcw, ArrowRightLeft, Trash2 } from 'lucide-react'
 import { Inventory, Product, Location, User } from '@/types'
+import { getKoreanDateString } from '@/lib/date-utils'
 
 interface InventoryModalProps {
   isOpen: boolean
@@ -12,6 +13,7 @@ interface InventoryModalProps {
   locations: Location[]
   user: User
   onSuccess: () => void
+  onDelete?: (item: Inventory) => void
 }
 
 export default function InventoryModal({
@@ -21,15 +23,16 @@ export default function InventoryModal({
   products,
   locations,
   user,
-  onSuccess
+  onSuccess,
+  onDelete
 }: InventoryModalProps) {
   const [formData, setFormData] = useState({
     product_id: '',
     location_id: '',
     batch_code: '',
-    movement_type: 'in' as 'in' | 'out' | 'adjustment' | 'transfer' | 'request',
-    quantity: 0,
-    movement_date: new Date().toISOString().split('T')[0],
+    movement_type: (user?.role === 'master' ? 'in' : 'out') as 'in' | 'out' | 'adjustment' | 'transfer' | 'request',
+    quantity: '',
+    movement_date: getKoreanDateString(),
     notes: '',
     to_location_id: '', // transfer용
     reason: '' // request용
@@ -37,15 +40,26 @@ export default function InventoryModal({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // 이동 타입에 따른 수량 레이블 반환
+  const getQuantityLabel = (movementType: string) => {
+    switch (movementType) {
+      case 'in': return '입고 수량'
+      case 'out': return '출고 수량' 
+      case 'adjustment': return '조정 후 수량'
+      case 'transfer': return '이동 수량'
+      default: return '수량'
+    }
+  }
+
   useEffect(() => {
     if (inventory && isOpen) {
       setFormData({
         product_id: inventory.product_id,
         location_id: inventory.location_id,
         batch_code: inventory.batch_code || '',
-        movement_type: user.role === 'master' ? 'transfer' : 'request',
-        quantity: 0,
-        movement_date: new Date().toISOString().split('T')[0],
+        movement_type: user.role === 'master' ? 'in' : 'out',
+        quantity: '',
+        movement_date: getKoreanDateString(),
         notes: '',
         to_location_id: '',
         reason: ''
@@ -67,7 +81,8 @@ export default function InventoryModal({
         throw new Error('배치코드를 입력해주세요.')
       }
 
-      if (formData.quantity <= 0) {
+      const quantity = parseInt(formData.quantity.toString())
+      if (isNaN(quantity) || quantity <= 0) {
         throw new Error('수량은 0보다 커야 합니다.')
       }
 
@@ -87,7 +102,7 @@ export default function InventoryModal({
             from_location_id: formData.location_id,
             to_location_id: formData.to_location_id,
             batch_code: formData.batch_code,
-            quantity: formData.quantity,
+            quantity: quantity,
             reason: formData.reason,
             requested_by: user.username
           })
@@ -117,7 +132,7 @@ export default function InventoryModal({
             from_location_id: formData.location_id,
             to_location_id: formData.to_location_id,
             batch_code: formData.batch_code,
-            quantity: formData.quantity,
+            quantity: quantity,
             movement_date: formData.movement_date,
             notes: formData.notes,
             username: user.username
@@ -159,9 +174,9 @@ export default function InventoryModal({
         product_id: '',
         location_id: '',
         batch_code: '',
-        movement_type: user.role === 'master' ? 'transfer' : 'request',
-        quantity: 0,
-        movement_date: new Date().toISOString().split('T')[0],
+        movement_type: user.role === 'master' ? 'in' : 'out',
+        quantity: '',
+        movement_date: getKoreanDateString(),
         notes: '',
         to_location_id: '',
         reason: ''
@@ -271,56 +286,86 @@ export default function InventoryModal({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               이동 타입 <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-4 gap-2">
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, movement_type: 'in' })}
-                className={`flex items-center justify-center p-3 rounded-md border text-sm font-medium ${
-                  formData.movement_type === 'in'
-                    ? 'bg-inbound-500 text-white border-inbound-500'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                입고
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, movement_type: 'out' })}
-                className={`flex items-center justify-center p-3 rounded-md border text-sm font-medium ${
-                  formData.movement_type === 'out'
-                    ? 'bg-outbound-500 text-white border-outbound-500'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <Minus className="w-4 h-4 mr-1" />
-                출고
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, movement_type: 'adjustment' })}
-                className={`flex items-center justify-center p-3 rounded-md border text-sm font-medium ${
-                  formData.movement_type === 'adjustment'
-                    ? 'bg-yellow-500 text-white border-yellow-500'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <RotateCcw className="w-4 h-4 mr-1" />
-                조정
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, movement_type: 'transfer', to_location_id: '' })}
-                className={`flex items-center justify-center p-3 rounded-md border text-sm font-medium ${
-                  formData.movement_type === 'transfer'
-                    ? 'bg-orange-500 text-white border-orange-500'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <ArrowRightLeft className="w-4 h-4 mr-1" />
-                이동
-              </button>
-            </div>
+            {user.role === 'master' ? (
+              <div className="grid grid-cols-4 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, movement_type: 'in' })}
+                  className={`flex items-center justify-center p-3 rounded-md border text-sm font-medium ${
+                    formData.movement_type === 'in'
+                      ? 'bg-inbound-500 text-white border-inbound-500'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  입고
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, movement_type: 'out' })}
+                  className={`flex items-center justify-center p-3 rounded-md border text-sm font-medium ${
+                    formData.movement_type === 'out'
+                      ? 'bg-outbound-500 text-white border-outbound-500'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <Minus className="w-4 h-4 mr-1" />
+                  출고
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, movement_type: 'adjustment' })}
+                  className={`flex items-center justify-center p-3 rounded-md border text-sm font-medium ${
+                    formData.movement_type === 'adjustment'
+                      ? 'bg-yellow-500 text-white border-yellow-500'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <RotateCcw className="w-4 h-4 mr-1" />
+                  조정
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, movement_type: 'transfer', to_location_id: '' })}
+                  className={`flex items-center justify-center p-3 rounded-md border text-sm font-medium ${
+                    formData.movement_type === 'transfer'
+                      ? 'bg-orange-500 text-white border-orange-500'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <ArrowRightLeft className="w-4 h-4 mr-1" />
+                  이동
+                </button>
+              </div>
+            ) : (
+              // 일반 계정은 출고와 조정만 가능
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, movement_type: 'out' })}
+                  className={`flex items-center justify-center p-3 rounded-md border text-sm font-medium ${
+                    formData.movement_type === 'out'
+                      ? 'bg-outbound-500 text-white border-outbound-500'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <Minus className="w-4 h-4 mr-1" />
+                  출고
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, movement_type: 'adjustment' })}
+                  className={`flex items-center justify-center p-3 rounded-md border text-sm font-medium ${
+                    formData.movement_type === 'adjustment'
+                      ? 'bg-yellow-500 text-white border-yellow-500'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <RotateCcw className="w-4 h-4 mr-1" />
+                  조정
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Transfer 목적지 위치 선택 */}
@@ -350,12 +395,12 @@ export default function InventoryModal({
           {/* 수량 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              {formData.movement_type === 'adjustment' ? '조정 후 수량' : '이동 수량'} <span className="text-red-500">*</span>
+              {getQuantityLabel(formData.movement_type)} <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
               value={formData.quantity}
-              onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })}
+              onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
               required
               min="1"
               className="input-field"
@@ -365,8 +410,8 @@ export default function InventoryModal({
               <div className="text-xs text-gray-500 mt-1">
                 {formData.movement_type === 'in' ? '입고 후' : '출고 후'} 예상 재고: {' '}
                 {formData.movement_type === 'in' 
-                  ? (currentStock + formData.quantity).toLocaleString()
-                  : (currentStock - formData.quantity).toLocaleString()
+                  ? (currentStock + (parseInt(formData.quantity.toString()) || 0)).toLocaleString()
+                  : (currentStock - (parseInt(formData.quantity.toString()) || 0)).toLocaleString()
                 } {selectedProduct.unit}
               </div>
             )}
@@ -406,22 +451,43 @@ export default function InventoryModal({
             </div>
           )}
 
-          <div className="flex gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 btn-secondary"
-              disabled={isLoading}
-            >
-              취소
-            </button>
-            <button
-              type="submit"
-              className="flex-1 btn-primary"
-              disabled={isLoading || !formData.product_id || !formData.location_id || formData.quantity <= 0}
-            >
-              {isLoading ? '처리 중...' : '등록'}
-            </button>
+          <div className="flex justify-between items-center pt-4">
+            {/* 삭제 버튼 - 왼쪽 */}
+            {inventory && onDelete && user.role === 'master' && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (inventory && confirm(`${inventory.product?.name} 제품을 삭제하시겠습니까?`)) {
+                    onDelete(inventory)
+                    onClose()
+                  }
+                }}
+                className="px-4 py-2 bg-white border-2 border-red-500 text-red-600 rounded-md hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 font-medium text-sm transition-colors duration-200 flex items-center gap-2"
+                disabled={isLoading}
+              >
+                <Trash2 className="w-4 h-4" />
+                삭제
+              </button>
+            )}
+            
+            {/* 기본 버튼들 - 오른쪽 */}
+            <div className="flex gap-3 ml-auto">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 btn-secondary"
+                disabled={isLoading}
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 btn-primary"
+                disabled={isLoading || !formData.product_id || !formData.location_id || !formData.quantity || parseInt(formData.quantity.toString()) <= 0}
+              >
+                {isLoading ? '처리 중...' : '등록'}
+              </button>
+            </div>
           </div>
         </form>
       </div>

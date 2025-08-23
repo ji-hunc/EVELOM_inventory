@@ -4,6 +4,7 @@ import React from 'react'
 import { Inventory, User } from '@/types'
 import { Edit, AlertTriangle, Package, Trash2 } from 'lucide-react'
 import { getExpiryStatus, sortBatchesByExpiry } from '@/lib/inventory-utils'
+import { formatKoreanDate } from '@/lib/date-utils'
 import Image from 'next/image'
 
 interface BatchDetailsProps {
@@ -16,7 +17,7 @@ interface BatchDetailsProps {
   onEditInventory: (item: Inventory) => void
   onDeleteProduct: (item: Inventory) => void
   isEditMode: boolean
-  editValues: Record<string, number>
+  editValues: Record<string, number | string>
   onStockChange: (itemId: string, value: string) => void
   isLowStock: (stock: number) => boolean
   showCategoryColumn?: boolean
@@ -99,8 +100,10 @@ export default function BatchDetails({
                 : 'bg-gray-50 hover:bg-gray-100'
             }`}
           >
-            {showImages && <td className="px-4 py-3"></td>}
-            <td className="px-4 py-3">
+            {showImages && (
+              <td className="px-4 py-3" style={showImages ? {width: '100px'} : undefined}></td>
+            )}
+            <td className="px-4 py-3" style={showImages ? {width: '250px'} : undefined}>
               <div className="flex items-center">
                 <div>
                   <div className="text-sm font-medium text-gray-700 flex items-center gap-2">
@@ -116,13 +119,13 @@ export default function BatchDetails({
               </div>
             </td>
             {showCategoryColumn && (
-              <td className="px-4 py-3 text-sm text-gray-500">
+              <td className="px-4 py-3 text-sm text-gray-500" style={showImages ? {width: '130px'} : undefined}>
                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                   {batch.product?.category?.name}
                 </span>
               </td>
             )}
-            <td className="px-4 py-3">
+            <td className="px-4 py-3" style={showImages ? {width: '90px'} : undefined}>
               {isEditMode ? (
                 <input
                   type="number"
@@ -133,21 +136,21 @@ export default function BatchDetails({
                 />
               ) : (
                 <div className={`text-sm font-semibold ${
-                  isLowStock(batch.current_stock) ? 'text-warning-600' : 'text-gray-900'
+                  isLowStock(batch.current_stock) ? 'text-red-400' : 'text-gray-900'
                 }`}>
                   {batch.current_stock.toLocaleString()}
                 </div>
               )}
             </td>
-            <td className="px-4 py-3 text-sm text-gray-500">
+            <td className="px-4 py-3 text-sm text-gray-500" style={showImages ? {width: '110px'} : undefined}>
               <span className="font-mono text-xs">
                 {batch.batch_code || '-'}
               </span>
             </td>
-            <td className="px-4 py-3 text-sm text-gray-500">
+            <td className="px-4 py-3 text-sm text-gray-500" style={showImages ? {width: '130px'} : undefined}>
               {batch.expiry_date ? (
                 <div className="flex flex-col">
-                  <span>{new Date(batch.expiry_date).toLocaleDateString('ko-KR')}</span>
+                  <span>{formatKoreanDate(batch.expiry_date)}</span>
                   {(() => {
                     const today = new Date()
                     const expiry = new Date(batch.expiry_date)
@@ -166,15 +169,15 @@ export default function BatchDetails({
                 </div>
               ) : '-'}
             </td>
-            <td className="px-4 py-3 text-sm text-gray-500">
-              {new Date(batch.last_updated).toLocaleDateString('ko-KR')}
+            <td className="px-4 py-3 text-sm text-gray-500" style={showImages ? {width: '110px'} : undefined}>
+              {formatKoreanDate(batch.last_updated)}
             </td>
-            <td className="px-4 py-3 text-sm text-gray-500">
-              -
+            <td className="px-4 py-3 text-sm text-gray-500" style={showImages ? {width: '110px'} : undefined}>
+              {batch.last_modified_user?.username || '-'}
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className="px-4 py-3 text-right" style={showImages ? {width: '90px'} : undefined}>
               <div className="flex items-center justify-end gap-2">
-                {!isAllSelected && canEditLocation(batch.location_id) && user.role === 'master' && (
+                {!isAllSelected && canEditLocation(batch.location_id) && (
                   <button 
                     onClick={(e) => {
                       e.stopPropagation()
@@ -187,19 +190,7 @@ export default function BatchDetails({
                     <Edit className="w-4 h-4" />
                   </button>
                 )}
-                {user.role === 'master' && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onDeleteProduct(batch)
-                    }}
-                    className="text-red-600 hover:text-red-900"
-                    title="제품 삭제"
-                    disabled={isEditMode}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
+                {/* 삭제 버튼 제거됨 */}
               </div>
             </td>
           </tr>

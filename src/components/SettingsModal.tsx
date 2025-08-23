@@ -26,6 +26,8 @@ export default function SettingsModal({
     setError('')
     setIsLoading(true)
 
+    console.log('Settings submit - Current user:', user)
+
     try {
       if (alertThreshold < 0) {
         throw new Error('임계치는 0 이상이어야 합니다.')
@@ -37,7 +39,7 @@ export default function SettingsModal({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId: user.id,
+          username: user.username,
           alert_threshold: alertThreshold
         }),
       })
@@ -103,7 +105,7 @@ export default function SettingsModal({
               <input
                 type="number"
                 value={alertThreshold}
-                onChange={(e) => setAlertThreshold(parseInt(e.target.value) || 0)}
+                onChange={(e) => setAlertThreshold(e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
                 min="0"
                 className="input-field"
                 placeholder="알림을 받을 최소 재고량"

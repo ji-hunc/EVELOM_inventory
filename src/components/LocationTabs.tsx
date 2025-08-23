@@ -31,8 +31,8 @@ export default function LocationTabs({
     return { totalItems, totalStock }
   }
 
-  // 일반 계정은 자신의 위치만, 마스터는 모든 위치 
-  const allowedLocations = user.role === 'master' 
+  // 일반 계정은 자신의 위치만, 마스터와 readonly는 모든 위치 
+  const allowedLocations = (user.role === 'master' || user.role === 'readonly')
     ? locations 
     : locations.filter(loc => loc.name === user.assigned_location_id)
 
@@ -76,8 +76,8 @@ export default function LocationTabs({
           )
         })}
         
-        {/* 전체 탭 - 마스터만 */}
-        {user.role === 'master' && (
+        {/* 전체 탭 - 마스터와 readonly */}
+        {(user.role === 'master' || user.role === 'readonly') && (
           <button
             onClick={() => onLocationSelect('all')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${

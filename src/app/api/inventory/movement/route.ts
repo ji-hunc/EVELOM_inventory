@@ -1,31 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getKoreanTime } from '@/lib/date-utils'
 
 export async function POST(request: NextRequest) {
   try {
     const { 
       product_id, 
       location_id, 
+      batch_code,
       movement_type, 
       quantity, 
       movement_date, 
-      notes 
+      notes,
+      username
     } = await request.json()
 
     // 입력 검증
-    if (!product_id || !location_id || !movement_type || quantity <= 0) {
+    if (!product_id || !location_id || !batch_code || !movement_type || quantity <= 0) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       )
     }
 
-    // 현재 재고 정보 가져오기
+    // 현재 재고 정보 가져오기 (배치코드까지 일치하는 항목)
     const { data: currentInventory } = await supabaseAdmin
       .from('inventory')
       .select('current_stock')
       .eq('product_id', product_id)
       .eq('location_id', location_id)
+      .eq('batch_code', batch_code)
       .single()
 
     const currentStock = currentInventory?.current_stock || 0
@@ -61,6 +65,7 @@ export async function POST(request: NextRequest) {
       .insert([{
         product_id,
         location_id,
+        batch_code,
         movement_type,
         quantity: movement_type === 'adjustment' 
           ? quantity - currentStock 
@@ -68,7 +73,8 @@ export async function POST(request: NextRequest) {
         previous_stock: currentStock,
         new_stock: newStock,
         movement_date,
-        notes: notes || null
+        notes: notes || null,
+        modified_by: username
       }])
 
     if (movementError) {
@@ -85,10 +91,12 @@ export async function POST(request: NextRequest) {
       .upsert([{
         product_id,
         location_id,
+        batch_code,
         current_stock: newStock,
-        last_updated: new Date().toISOString()
+        last_updated: getKoreanTime(),
+        last_modified_by: username
       }], {
-        onConflict: 'product_id,location_id'
+        onConflict: 'product_id,location_id,batch_code'
       })
 
     if (inventoryError) {

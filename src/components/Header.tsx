@@ -12,17 +12,13 @@ interface HeaderProps {
   onLogout: () => void
   viewMode: 'current' | 'monthly' | 'transactions'
   onViewModeChange: (mode: 'current' | 'monthly' | 'transactions') => void
-  showImages: boolean
-  onToggleImages: () => void
 }
 
 export default function Header({ 
   user, 
   onLogout, 
   viewMode, 
-  onViewModeChange, 
-  showImages, 
-  onToggleImages 
+  onViewModeChange
 }: HeaderProps) {
   const { logout, updateUser } = useAuth()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
@@ -52,6 +48,14 @@ export default function Header({
               >
                 재고관리
               </Link>
+              {(user.role === 'master' || user.role === 'readonly') && (
+                <Link 
+                  href="/products"
+                  className="text-sm font-medium text-gray-700 hover:text-primary-600 transition-colors"
+                >
+                  제품관리
+                </Link>
+              )}
               <Link 
                 href="/stats"
                 className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-primary-600 transition-colors"

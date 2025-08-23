@@ -5,6 +5,90 @@ interface RouteParams {
   params: Promise<{ id: string }>
 }
 
+export async function PUT(
+  request: NextRequest,
+  { params }: RouteParams
+) {
+  try {
+    const { id: productId } = await params
+    const { name, category_id, description, image_url, code } = await request.json()
+
+    // 입력 유효성 검사
+    if (!name?.trim()) {
+      return NextResponse.json(
+        { error: '제품명은 필수입니다.' },
+        { status: 400 }
+      )
+    }
+
+    if (!category_id) {
+      return NextResponse.json(
+        { error: '카테고리는 필수입니다.' },
+        { status: 400 }
+      )
+    }
+
+    // 제품 정보 업데이트
+    const { data: updatedProduct, error: updateError } = await supabaseAdmin
+      .from('products')
+      .update({
+        name: name.trim(),
+        category_id,
+        code: code?.trim() || null,
+        description: description?.trim() || null,
+        image_url: image_url || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('name', productId) // name을 PK로 사용
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error('Product update error:', updateError)
+      return NextResponse.json(
+        { error: '제품 수정에 실패했습니다.', details: updateError.message },
+        { status: 500 }
+      )
+    }
+
+    // 제품명이 변경된 경우, 관련 재고와 이동 기록의 product_id도 업데이트
+    if (productId !== name.trim()) {
+      // 재고 데이터의 product_id 업데이트
+      const { error: inventoryUpdateError } = await supabaseAdmin
+        .from('inventory')
+        .update({ product_id: name.trim() })
+        .eq('product_id', productId)
+
+      if (inventoryUpdateError) {
+        console.error('Inventory product_id update error:', inventoryUpdateError)
+      }
+
+      // 재고 이동 기록의 product_id 업데이트
+      const { error: movementUpdateError } = await supabaseAdmin
+        .from('inventory_movements')
+        .update({ product_id: name.trim() })
+        .eq('product_id', productId)
+
+      if (movementUpdateError) {
+        console.error('Movement product_id update error:', movementUpdateError)
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      product: updatedProduct,
+      message: '제품 정보가 성공적으로 수정되었습니다.'
+    })
+
+  } catch (error) {
+    console.error('Product update API error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: RouteParams

@@ -1,37 +1,57 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Plus, Upload, Image as ImageIcon, Package } from 'lucide-react'
-import { Category, Location } from '@/types'
+import { useState, useEffect } from 'react'
+import { X, Upload, Package } from 'lucide-react'
+import { Category, Product } from '@/types'
 
-interface AddProductModalProps {
+interface ProductRegistrationModalProps {
   isOpen: boolean
   onClose: () => void
+  product?: Product | null
   categories: Category[]
-  locations: Location[]
-  onProductAdded: () => void
+  onProductSaved: () => void
 }
 
-export default function AddProductModal({
+export default function ProductRegistrationModal({
   isOpen,
   onClose,
+  product,
   categories,
-  locations,
-  onProductAdded
-}: AddProductModalProps) {
+  onProductSaved
+}: ProductRegistrationModalProps) {
   const [formData, setFormData] = useState({
     name: '',
     category_id: '',
     code: '',
-    unit: 'EA',
     description: '',
-    image_url: '',
-    initial_stocks: [] as { location_id: string; batch_code: string; quantity: number }[]
+    image_url: ''
   })
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (product && isOpen) {
+      setFormData({
+        name: product.name,
+        category_id: product.category_id,
+        code: product.code || '',
+        description: product.description || '',
+        image_url: product.image_url || ''
+      })
+      setImagePreview(product.image_url || '')
+    } else if (isOpen) {
+      setFormData({
+        name: '',
+        category_id: '',
+        code: '',
+        description: '',
+        image_url: ''
+      })
+      setImagePreview('')
+    }
+  }, [product, isOpen])
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -58,38 +78,15 @@ export default function AddProductModal({
     }
   }
 
-  const addStockEntry = () => {
-    setFormData(prev => ({
-      ...prev,
-      initial_stocks: [...prev.initial_stocks, { location_id: '', batch_code: '', quantity: 0 }]
-    }))
-  }
-
-  const removeStockEntry = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      initial_stocks: prev.initial_stocks.filter((_, i) => i !== index)
-    }))
-  }
-
-  const updateStockEntry = (index: number, field: keyof typeof formData.initial_stocks[0], value: string | number) => {
-    setFormData(prev => ({
-      ...prev,
-      initial_stocks: prev.initial_stocks.map((stock, i) => 
-        i === index ? { ...stock, [field]: value } : stock
-      )
-    }))
-  }
-
   const uploadImage = async (): Promise<string> => {
-    if (!imageFile) return ''
+    if (!imageFile) return formData.image_url
 
-    const formData = new FormData()
-    formData.append('file', imageFile)
+    const uploadFormData = new FormData()
+    uploadFormData.append('file', imageFile)
 
     const response = await fetch('/api/upload', {
       method: 'POST',
-      body: formData
+      body: uploadFormData
     })
 
     if (!response.ok) {
@@ -115,13 +112,13 @@ export default function AddProductModal({
       }
 
       // 이미지 업로드 (선택사항)
-      let imageUrl = formData.image_url
-      if (imageFile) {
-        imageUrl = await uploadImage()
-      }
+      let imageUrl = await uploadImage()
 
-      const response = await fetch('/api/products', {
-        method: 'POST',
+      const url = product ? `/api/products/${encodeURIComponent(product.name)}` : '/api/products'
+      const method = product ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -129,38 +126,21 @@ export default function AddProductModal({
           name: formData.name.trim(),
           category_id: formData.category_id,
           code: formData.code.trim(),
-          unit: formData.unit,
           description: formData.description.trim(),
-          image_url: imageUrl,
-          initial_stocks: formData.initial_stocks.filter(stock => 
-            stock.location_id && stock.batch_code && stock.quantity > 0
-          )
+          image_url: imageUrl
         })
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || '제품 추가에 실패했습니다.')
+        throw new Error(errorData.error || `제품 ${product ? '수정' : '등록'}에 실패했습니다.`)
       }
 
-      // 성공 시 폼 초기화
-      setFormData({
-        name: '',
-        category_id: '',
-        code: '',
-        unit: 'EA',
-        description: '',
-        image_url: '',
-        initial_stocks: []
-      })
-      setImageFile(null)
-      setImagePreview('')
-      
-      onProductAdded()
-      onClose()
+      onProductSaved()
+      handleClose()
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : '제품 추가 중 오류가 발생했습니다.')
+      setError(err instanceof Error ? err.message : `제품 ${product ? '수정' : '등록'} 중 오류가 발생했습니다.`)
     } finally {
       setIsLoading(false)
     }
@@ -171,10 +151,8 @@ export default function AddProductModal({
       name: '',
       category_id: '',
       code: '',
-      unit: 'EA',
       description: '',
-      image_url: '',
-      initial_stocks: []
+      image_url: ''
     })
     setImageFile(null)
     setImagePreview('')
@@ -189,8 +167,10 @@ export default function AddProductModal({
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center gap-2">
-            <Plus className="w-5 h-5 text-primary-600" />
-            <h3 className="text-lg font-semibold text-gray-900">새 제품 추가</h3>
+            <Package className="w-5 h-5 text-primary-600" />
+            <h3 className="text-lg font-semibold text-gray-900">
+              {product ? '제품 정보 수정' : '새 제품 등록'}
+            </h3>
           </div>
           <button
             onClick={handleClose}
@@ -249,25 +229,6 @@ export default function AddProductModal({
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                단위 *
-              </label>
-              <select
-                value={formData.unit}
-                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                className="select-field"
-                required
-              >
-                <option value="EA">개</option>
-                <option value="KG">kg</option>
-                <option value="L">L</option>
-                <option value="ML">ml</option>
-                <option value="G">g</option>
-                <option value="BOX">박스</option>
-                <option value="SET">세트</option>
-              </select>
-            </div>
           </div>
 
           {/* 설명 */}
@@ -319,16 +280,21 @@ export default function AddProductModal({
                     />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{imageFile?.name}</p>
-                    <p className="text-xs text-gray-500">
-                      {imageFile && (imageFile.size / 1024 / 1024).toFixed(2)}MB
+                    <p className="text-sm font-medium text-gray-900">
+                      {imageFile?.name || '현재 이미지'}
                     </p>
+                    {imageFile && (
+                      <p className="text-xs text-gray-500">
+                        {(imageFile.size / 1024 / 1024).toFixed(2)}MB
+                      </p>
+                    )}
                   </div>
                   <button
                     type="button"
                     onClick={() => {
                       setImageFile(null)
                       setImagePreview('')
+                      setFormData({ ...formData, image_url: '' })
                     }}
                     className="text-gray-400 hover:text-gray-600"
                   >
@@ -337,100 +303,6 @@ export default function AddProductModal({
                 </div>
               )}
             </div>
-          </div>
-
-          {/* 초기 재고 설정 */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <label className="block text-sm font-medium text-gray-700">
-                초기 재고 설정 (배치별)
-              </label>
-              <button
-                type="button"
-                onClick={addStockEntry}
-                className="btn-secondary text-sm flex items-center gap-1"
-              >
-                <Plus className="w-4 h-4" />
-                배치 추가
-              </button>
-            </div>
-            
-            {formData.initial_stocks.length === 0 ? (
-              <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
-                <Package className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                <p>초기 재고가 없습니다.</p>
-                <p className="text-sm">필요시 "배치 추가" 버튼을 클릭하세요.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {formData.initial_stocks.map((stock, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 border border-gray-200 rounded-lg">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        위치
-                      </label>
-                      <select
-                        value={stock.location_id}
-                        onChange={(e) => updateStockEntry(index, 'location_id', e.target.value)}
-                        className="select-field text-sm"
-                        required
-                      >
-                        <option value="">위치 선택</option>
-                        {locations.map(location => (
-                          <option key={location.id} value={location.name}>
-                            {location.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        배치코드
-                      </label>
-                      <input
-                        type="text"
-                        value={stock.batch_code}
-                        onChange={(e) => updateStockEntry(index, 'batch_code', e.target.value)}
-                        className="input-field text-sm"
-                        placeholder="예: 4030, 4030A"
-                        required
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        수량
-                      </label>
-                      <input
-                        type="number"
-                        value={stock.quantity}
-                        onChange={(e) => updateStockEntry(index, 'quantity', e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
-                        className="input-field text-sm"
-                        min="0"
-                        placeholder="0"
-                        required
-                      />
-                    </div>
-                    
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        onClick={() => removeStockEntry(index)}
-                        className="text-red-600 hover:text-red-800 p-2"
-                        title="삭제"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            
-            <p className="text-xs text-gray-500 mt-2">
-              배치코드 형식: 첫 자리(생산연도) + 3자리(일련번호) + 선택적 알파벳 (예: 4030, 4030A)
-            </p>
           </div>
 
           {error && (
@@ -453,7 +325,7 @@ export default function AddProductModal({
               className="flex-1 btn-primary"
               disabled={isLoading}
             >
-              {isLoading ? '추가 중...' : '제품 추가'}
+              {isLoading ? '처리 중...' : product ? '수정' : '등록'}
             </button>
           </div>
         </form>

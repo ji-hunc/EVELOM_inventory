@@ -2,9 +2,10 @@
 
 import React, { useState } from 'react'
 import { Inventory, Category, Product, Location, User } from '@/types'
-import { Edit, Plus, AlertTriangle, Package, Download, Trash2, Save, X, ChevronDown, ChevronUp, Layout, Grid3X3 } from 'lucide-react'
+import { Edit, Plus, AlertTriangle, Package, Download, Trash2, Save, X, ChevronDown, ChevronUp, Layout, Grid3X3, ImageIcon } from 'lucide-react'
 import { exportInventoryToExcel } from '@/lib/excel'
 import { groupInventoryByProduct, GroupedInventoryItem } from '@/lib/inventory-utils'
+import { formatKoreanDate } from '@/lib/date-utils'
 import Image from 'next/image'
 import InventoryModal from './InventoryModal'
 import BatchDetails from './BatchDetails'
@@ -16,7 +17,6 @@ interface InventoryTableProps {
   categories: Category[]
   products: Product[]
   locations: Location[]
-  showImages: boolean
   viewMode: 'current' | 'monthly' | 'transactions'
   user: User
   alertThreshold: number
@@ -30,7 +30,6 @@ export default function InventoryTable({
   categories,
   products,
   locations,
-  showImages,
   viewMode,
   user,
   alertThreshold,
@@ -41,14 +40,20 @@ export default function InventoryTable({
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [sortBy, setSortBy] = useState<'name' | 'category' | 'stock' | 'batch_code'>('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  // 카테고리별 정렬 상태 관리
+  const [categorySortStates, setCategorySortStates] = useState<Record<string, {
+    sortBy: 'name' | 'category' | 'stock' | 'batch_code'
+    sortOrder: 'asc' | 'desc'
+  }>>({})
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedInventory, setSelectedInventory] = useState<Inventory | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)
-  const [editValues, setEditValues] = useState<Record<string, number>>({})
+  const [editValues, setEditValues] = useState<Record<string, number | string>>({})
   const [isSaving, setIsSaving] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [allExpanded, setAllExpanded] = useState(false)
-  const [tableViewMode, setTableViewMode] = useState<'single' | 'category-separated'>('single')
+  const [showImagesLocal, setShowImagesLocal] = useState(false)
+  const [tableViewMode, setTableViewMode] = useState<'single' | 'category-separated'>('category-separated')
 
   // 사용자가 해당 위치를 수정할 수 있는지 확인
   const canEditLocation = (locationId: string) => {
@@ -61,6 +66,7 @@ export default function InventoryTable({
 
   // 현재 선택된 위치를 일반 사용자가 수정할 수 있는지 확인
   const canEditCurrentLocation = () => {
+    if (user.role === 'readonly') return false // 읽기 전용 사용자는 수정 불가
     if (isAllSelected) return false // 전체 탭에서는 수정 불가
     return canEditLocation(selectedLocation)
   }
@@ -102,9 +108,15 @@ export default function InventoryTable({
   // 상품별로 그룹화된 데이터
   const groupedInventory = groupInventoryByProduct(filteredInventory)
 
+  // 카테고리 정렬 순서 정의
+  const categoryOrder = ['정제품', '샘플', '사셰', '테스터']
+  
   // 카테고리별로 분리된 데이터 (category-separated 모드용)
   const inventoryByCategory = tableViewMode === 'category-separated' 
-    ? categories.reduce((acc, category) => {
+    ? categoryOrder.reduce((acc, categoryName) => {
+        const category = categories.find(cat => cat.name === categoryName)
+        if (!category) return acc
+        
         const categoryInventory = filteredInventory.filter(item => 
           item.product?.category_id === category.name
         )
@@ -162,6 +174,66 @@ export default function InventoryTable({
       setSortBy(field)
       setSortOrder('asc')
     }
+  }
+
+  // 카테고리별 정렬 핸들러
+  const handleCategorySort = (categoryName: string, field: 'name' | 'category' | 'stock' | 'batch_code') => {
+    const currentState = categorySortStates[categoryName] || { sortBy: 'name', sortOrder: 'asc' }
+    
+    if (currentState.sortBy === field) {
+      setCategorySortStates(prev => ({
+        ...prev,
+        [categoryName]: {
+          ...currentState,
+          sortOrder: currentState.sortOrder === 'asc' ? 'desc' : 'asc'
+        }
+      }))
+    } else {
+      setCategorySortStates(prev => ({
+        ...prev,
+        [categoryName]: {
+          sortBy: field,
+          sortOrder: 'asc'
+        }
+      }))
+    }
+  }
+
+  // 카테고리별 정렬된 인벤토리 반환
+  const getSortedCategoryInventory = (categoryName: string, groupedInventory: GroupedInventoryItem[]) => {
+    const sortState = categorySortStates[categoryName] || { sortBy: 'name', sortOrder: 'asc' }
+    
+    return [...groupedInventory].sort((a, b) => {
+      let aValue: string | number
+      let bValue: string | number
+
+      switch (sortState.sortBy) {
+        case 'name':
+          aValue = a.product?.name || ''
+          bValue = b.product?.name || ''
+          break
+        case 'category':
+          aValue = a.product?.category?.name || ''
+          bValue = b.product?.category?.name || ''
+          break
+        case 'stock':
+          aValue = a.total_stock
+          bValue = b.total_stock
+          break
+        case 'batch_code':
+          aValue = getGroupBatchSortValue(a)
+          bValue = getGroupBatchSortValue(b)
+          break
+        default:
+          aValue = a.product?.name || ''
+          bValue = b.product?.name || ''
+      }
+
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortState.sortOrder === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue)
+      }
+      return sortState.sortOrder === 'asc' ? (aValue as number) - (bValue as number) : (bValue as number) - (aValue as number)
+    })
   }
 
   const isLowStock = (stock: number) => stock <= alertThreshold
@@ -276,7 +348,7 @@ export default function InventoryTable({
   }
 
   const handleStockChange = (itemId: string, value: string) => {
-    const numValue = parseInt(value) || 0
+    const numValue = value === '' ? '' : (parseInt(value) || 0)
     setEditValues(prev => ({
       ...prev,
       [itemId]: numValue
@@ -288,7 +360,9 @@ export default function InventoryTable({
       setIsSaving(true)
       
       const updates = Object.entries(editValues)
-        .map(([itemId, newStock]) => {
+        .map(([itemId, newStockValue]) => {
+          const newStock = typeof newStockValue === 'string' ? parseInt(newStockValue) : newStockValue
+          if (isNaN(newStock)) return null
           // 보기 모드에 따라 아이템 찾기
           let item: Inventory | undefined
           
@@ -405,106 +479,82 @@ export default function InventoryTable({
     }
   ) => {
     const { category, groupedInventory: categoryGroupedInventory } = categoryData
-    // 공통 정렬 함수를 사용하여 카테고리별 정렬 수행
-    const sortedCategoryInventory = [...categoryGroupedInventory].sort((a, b) => {
-      let aValue: string | number
-      let bValue: string | number
-
-      switch (sortBy) {
-        case 'name':
-          aValue = a.product?.name || ''
-          bValue = b.product?.name || ''
-          break
-        case 'category':
-          aValue = a.product?.category?.name || ''
-          bValue = b.product?.category?.name || ''
-          break
-        case 'stock':
-          aValue = a.total_stock
-          bValue = b.total_stock
-          break
-        case 'batch_code':
-          // 카테고리별 정렬에서도 같은 배치 정렬 로직 사용
-          if (a.batch_count === 1) {
-            aValue = extractBatchNumber(a.batches[0]?.batch_code)
-          } else {
-            const aBatchNumbers = a.batches
-              .map(batch => extractBatchNumber(batch.batch_code))
-              .filter(num => num > 0)
-            aValue = aBatchNumbers.length > 0 ? 
-              (sortOrder === 'asc' ? Math.min(...aBatchNumbers) : Math.max(...aBatchNumbers)) : 0
-          }
-          
-          if (b.batch_count === 1) {
-            bValue = extractBatchNumber(b.batches[0]?.batch_code)
-          } else {
-            const bBatchNumbers = b.batches
-              .map(batch => extractBatchNumber(batch.batch_code))
-              .filter(num => num > 0)
-            bValue = bBatchNumbers.length > 0 ? 
-              (sortOrder === 'asc' ? Math.min(...bBatchNumbers) : Math.max(...bBatchNumbers)) : 0
-          }
-          break
-        default:
-          aValue = a.product?.name || ''
-          bValue = b.product?.name || ''
-      }
-
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortOrder === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue)
-      }
-      return sortOrder === 'asc' ? (aValue as number) - (bValue as number) : (bValue as number) - (aValue as number)
-    })
+    // 카테고리별 독립적인 정렬 적용
+    const sortedCategoryInventory = getSortedCategoryInventory(categoryName, categoryGroupedInventory)
+    const categorySort = categorySortStates[categoryName] || { sortBy: 'name', sortOrder: 'asc' }
 
     return (
       <div key={categoryName} className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-6">
-        <div className="bg-primary-50 border-b border-primary-100 px-4 py-3">
-          <h3 className="text-lg font-semibold text-primary-900 flex items-center gap-2">
+        <div className="bg-gray-100 border-b border-gray-200 px-4 py-3">
+          <h3 className="text-lg font-semibold text-gray-700 flex items-center gap-2">
             <Package className="w-5 h-5" />
             {category.name} 
-            <span className="text-sm font-normal text-primary-700">
+            <span className="text-sm font-normal text-gray-600">
               ({sortedCategoryInventory.length}개 제품)
             </span>
           </h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 table-fixed">
+          <table className={`min-w-full divide-y divide-gray-200 ${showImagesLocal ? 'table-auto' : 'table-fixed'}`} style={showImagesLocal ? {width: 'max-content'} : undefined}>
             <thead className="bg-gray-50">
               <tr>
-                {showImages && (
-                  <th className="w-20 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                {showImagesLocal && (
+                  <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${showImagesLocal ? '' : 'w-20'}`} style={showImagesLocal ? {width: '100px'} : undefined}>
                     이미지
                   </th>
                 )}
-                <th className="w-60 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  제품명
-                </th>
-                <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  현재고
-                </th>
                 <th 
-                  className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('batch_code')}
+                  className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 ${showImagesLocal ? '' : 'w-60'}`}
+                  onClick={() => handleCategorySort(categoryName, 'name')}
+                  style={showImagesLocal ? {width: '250px'} : undefined}
                 >
                   <div className="flex items-center gap-1">
-                    배치코드
-                    {sortBy === 'batch_code' && (
+                    제품명
+                    {categorySort.sortBy === 'name' && (
                       <span className="text-primary-500">
-                        {sortOrder === 'asc' ? '↑' : '↓'}
+                        {categorySort.sortOrder === 'asc' ? '↑' : '↓'}
                       </span>
                     )}
                   </div>
                 </th>
-                <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th 
+                  className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 ${showImagesLocal ? '' : 'w-24'}`}
+                  onClick={() => handleCategorySort(categoryName, 'stock')}
+                  style={showImagesLocal ? {width: '90px'} : undefined}
+                >
+                  <div className="flex items-center gap-1">
+                    현재고
+                    {categorySort.sortBy === 'stock' && (
+                      <span className="text-primary-500">
+                        {categorySort.sortOrder === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th 
+                  className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 ${showImagesLocal ? '' : 'w-24'}`}
+                  onClick={() => handleCategorySort(categoryName, 'batch_code')}
+                  style={showImagesLocal ? {width: '110px'} : undefined}
+                >
+                  <div className="flex items-center gap-1">
+                    배치코드
+                    {categorySort.sortBy === 'batch_code' && (
+                      <span className="text-primary-500">
+                        {categorySort.sortOrder === 'asc' ? '↑' : '↓'}
+                      </span>
+                    )}
+                  </div>
+                </th>
+                <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${showImagesLocal ? '' : 'w-32'}`} style={showImagesLocal ? {width: '130px'} : undefined}>
                   유통기한
                 </th>
-                <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${showImagesLocal ? '' : 'w-24'}`} style={showImagesLocal ? {width: '110px'} : undefined}>
                   최종수정
                 </th>
-                <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${showImagesLocal ? '' : 'w-24'}`} style={showImagesLocal ? {width: '110px'} : undefined}>
                   최종수정자
                 </th>
-                <th className="w-20 px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className={`px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider ${showImagesLocal ? '' : 'w-20'}`} style={showImagesLocal ? {width: '90px'} : undefined}>
                   작업
                 </th>
               </tr>
@@ -513,7 +563,7 @@ export default function InventoryTable({
               {sortedCategoryInventory.length === 0 ? (
                 <tr>
                   <td 
-                    colSpan={showImages ? 8 : 7} 
+                    colSpan={showImagesLocal ? 8 : 7} 
                     className="px-4 py-12 text-center text-gray-500"
                   >
                     {category.name} 카테고리에 재고 데이터가 없습니다.
@@ -534,7 +584,7 @@ export default function InventoryTable({
                         } ${hasMultipleBatches ? 'cursor-pointer' : ''}`}
                         onClick={hasMultipleBatches ? () => toggleGroupExpansion(groupKey) : undefined}
                       >
-                        {showImages && (
+                        {showImagesLocal && (
                           <td className="px-4 py-3">
                             <div className="w-16 h-16 bg-gray-100 rounded-md flex items-center justify-center overflow-hidden">
                               {group.product?.image_url ? (
@@ -590,7 +640,7 @@ export default function InventoryTable({
                             />
                           ) : (
                             <div className={`text-sm font-semibold ${
-                              isLowStock(group.total_stock) ? 'text-warning-600' : 'text-gray-900'
+                              isLowStock(group.total_stock) ? 'text-red-400' : 'text-gray-900'
                             }`}>
                               {group.total_stock.toLocaleString()}
                             </div>
@@ -614,7 +664,7 @@ export default function InventoryTable({
                             </span>
                           ) : firstBatch?.expiry_date ? (
                             <div className="flex flex-col">
-                              <span>{new Date(firstBatch.expiry_date).toLocaleDateString('ko-KR')}</span>
+                              <span>{formatKoreanDate(firstBatch.expiry_date)}</span>
                               {(() => {
                                 const today = new Date()
                                 const expiry = new Date(firstBatch.expiry_date)
@@ -634,40 +684,33 @@ export default function InventoryTable({
                           ) : '-'}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
-                          {new Date(group.latest_updated).toLocaleDateString('ko-KR')}
+                          {formatKoreanDate(group.latest_updated)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
-                          -
+                          {firstBatch?.last_modified_user?.username || '-'}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {!isAllSelected && canEditLocation(group.location_id) && user.role === 'master' && (
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleEditInventory(firstBatch)
-                                }}
-                                className="text-primary-600 hover:text-primary-900"
-                                title="재고 이동"
-                                disabled={isEditMode}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                            )}
-                            {user.role === 'master' && (
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleDeleteProduct(firstBatch)
-                                }}
-                                className="text-red-600 hover:text-red-900"
-                                title="제품 삭제"
-                                disabled={isEditMode}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
+                          {hasMultipleBatches ? (
+                            /* 다중 배치 그룹의 메인 row는 작업 버튼 없음 */
+                            <></>
+                          ) : (
+                            /* 단일 배치 제품은 작업 버튼 표시 (삭제 버튼 제외) */
+                            <div className="flex items-center justify-end gap-2">
+                              {!isAllSelected && canEditLocation(group.location_id) && (
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleEditInventory(firstBatch)
+                                  }}
+                                  className="text-primary-600 hover:text-primary-900"
+                                  title="재고 이동"
+                                  disabled={isEditMode}
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </td>
                       </tr>
                       
@@ -676,7 +719,7 @@ export default function InventoryTable({
                         <BatchDetails
                           batches={group.batches}
                           isExpanded={isExpanded}
-                          showImages={showImages}
+                          showImages={showImagesLocal}
                           user={user}
                           isAllSelected={isAllSelected}
                           canEditLocation={canEditLocation}
@@ -687,8 +730,8 @@ export default function InventoryTable({
                           onStockChange={handleStockChange}
                           isLowStock={isLowStock}
                           showCategoryColumn={false}
-                          sortBy={sortBy}
-                          sortOrder={sortOrder}
+                          sortBy={categorySort.sortBy}
+                          sortOrder={categorySort.sortOrder}
                         />
                       )}
                     </React.Fragment>
@@ -709,6 +752,7 @@ export default function InventoryTable({
         products={products}
         locations={locations}
         categories={categories}
+        inventory={inventory}
       />
     )
   }
@@ -736,6 +780,17 @@ export default function InventoryTable({
             </label>
             <div className="flex items-center gap-1 bg-gray-100 rounded-md p-1">
               <button
+                onClick={() => setTableViewMode('category-separated')}
+                className={`flex items-center gap-2 px-3 py-2 rounded text-sm font-medium ${
+                  tableViewMode === 'category-separated' 
+                    ? 'bg-white text-primary-600 shadow' 
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <Grid3X3 className="w-4 h-4" />
+                카테고리
+              </button>
+              <button
                 onClick={() => setTableViewMode('single')}
                 className={`flex items-center gap-2 px-3 py-2 rounded text-sm font-medium ${
                   tableViewMode === 'single' 
@@ -746,19 +801,9 @@ export default function InventoryTable({
                 <Layout className="w-4 h-4" />
                 통합
               </button>
-              <button
-                onClick={() => setTableViewMode('category-separated')}
-                className={`flex items-center gap-2 px-3 py-2 rounded text-sm font-medium ${
-                  tableViewMode === 'category-separated' 
-                    ? 'bg-white text-primary-600 shadow' 
-                    : 'text-gray-600 hover:text-gray-800'
-                }`}
-              >
-                <Grid3X3 className="w-4 h-4" />
-                카테고리별
-              </button>
             </div>
           </div>
+
 
           {/* 카테고리 필터 (통합 모드일 때만) */}
           {tableViewMode === 'single' && (
@@ -784,40 +829,44 @@ export default function InventoryTable({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* 이미지 토글 버튼 */}
+          <button
+            onClick={() => setShowImagesLocal(!showImagesLocal)}
+            className={`p-2 rounded text-sm font-medium transition-colors ${
+              showImagesLocal 
+                ? 'bg-primary-100 text-primary-600' 
+                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+            }`}
+            title={`이미지 ${showImagesLocal ? "숨기기" : "보기"}`}
+          >
+            <ImageIcon className="w-4 h-4" />
+          </button>
+          
+          {/* 엑셀 다운로드 버튼 */}
+          <button 
+            onClick={handleExportExcel}
+            className="p-2 rounded text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+            title="엑셀 다운로드"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+          
           {hasExpandableGroups && (
             <button 
               onClick={toggleAllGroups}
-              className="btn-secondary text-xs flex items-center gap-1"
+              className="btn-secondary flex items-center gap-2"
             >
               {allExpanded ? (
                 <>
-                  <ChevronUp className="w-3 h-3" />
+                  <ChevronUp className="w-4 h-4" />
                   모두 접기
                 </>
               ) : (
                 <>
-                  <ChevronDown className="w-3 h-3" />
+                  <ChevronDown className="w-4 h-4" />
                   모두 펼치기
                 </>
               )}
-            </button>
-          )}
-          
-          <button 
-            onClick={handleExportExcel}
-            className="btn-secondary flex items-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            엑셀 다운로드
-          </button>
-          
-          {canEditCurrentLocation() && user.role === 'master' && (
-            <button 
-              onClick={handleAddInventory}
-              className="btn-primary flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              재고 이동
             </button>
           )}
 
@@ -860,17 +909,18 @@ export default function InventoryTable({
         // 통합 테이블 모드
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 table-fixed">
+            <table className={`min-w-full divide-y divide-gray-200 ${showImagesLocal ? 'table-auto' : 'table-fixed'}`} style={showImagesLocal ? {width: 'max-content'} : undefined}>
               <thead className="bg-gray-50">
                 <tr>
-                  {showImages && (
-                    <th className="w-20 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {showImagesLocal && (
+                    <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${showImagesLocal ? '' : 'w-20'}`} style={showImagesLocal ? {width: '100px'} : undefined}>
                       이미지
                     </th>
                   )}
                   <th 
-                    className="w-60 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 ${showImagesLocal ? '' : 'w-60'}`}
                     onClick={() => handleSort('name')}
+                    style={showImagesLocal ? {width: '250px'} : undefined}
                   >
                     <div className="flex items-center gap-1">
                       제품명
@@ -882,8 +932,9 @@ export default function InventoryTable({
                     </div>
                   </th>
                   <th 
-                    className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 ${showImagesLocal ? '' : 'w-32'}`}
                     onClick={() => handleSort('category')}
+                    style={showImagesLocal ? {width: '130px'} : undefined}
                   >
                     <div className="flex items-center gap-1">
                       카테고리
@@ -895,8 +946,9 @@ export default function InventoryTable({
                     </div>
                   </th>
                   <th 
-                    className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 ${showImagesLocal ? '' : 'w-24'}`}
                     onClick={() => handleSort('stock')}
+                    style={showImagesLocal ? {width: '90px'} : undefined}
                   >
                     <div className="flex items-center gap-1">
                       현재고
@@ -908,8 +960,9 @@ export default function InventoryTable({
                     </div>
                   </th>
                   <th 
-                    className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 ${showImagesLocal ? '' : 'w-24'}`}
                     onClick={() => handleSort('batch_code')}
+                    style={showImagesLocal ? {width: '110px'} : undefined}
                   >
                     <div className="flex items-center gap-1">
                       배치코드
@@ -920,16 +973,16 @@ export default function InventoryTable({
                       )}
                     </div>
                   </th>
-                  <th className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${showImagesLocal ? '' : 'w-32'}`} style={showImagesLocal ? {width: '130px'} : undefined}>
                     유통기한
                   </th>
-                  <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${showImagesLocal ? '' : 'w-24'}`} style={showImagesLocal ? {width: '110px'} : undefined}>
                     최종수정
                   </th>
-                  <th className="w-24 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${showImagesLocal ? '' : 'w-24'}`} style={showImagesLocal ? {width: '110px'} : undefined}>
                     최종수정자
                   </th>
-                  <th className="w-20 px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className={`px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider ${showImagesLocal ? '' : 'w-20'}`} style={showImagesLocal ? {width: '90px'} : undefined}>
                     작업
                   </th>
                 </tr>
@@ -938,7 +991,7 @@ export default function InventoryTable({
                 {sortedGroupedInventory.length === 0 ? (
                   <tr>
                     <td 
-                      colSpan={showImages ? 9 : 8} 
+                      colSpan={showImagesLocal ? 9 : 8} 
                       className="px-4 py-12 text-center text-gray-500"
                     >
                       재고 데이터가 없습니다.
@@ -959,7 +1012,7 @@ export default function InventoryTable({
                           } ${hasMultipleBatches ? 'cursor-pointer' : ''}`}
                           onClick={hasMultipleBatches ? () => toggleGroupExpansion(groupKey) : undefined}
                         >
-                          {showImages && (
+                          {showImagesLocal && (
                             <td className="px-4 py-3">
                               <div className="w-16 h-16 bg-gray-100 rounded-md flex items-center justify-center overflow-hidden">
                                 {group.product?.image_url ? (
@@ -1020,7 +1073,7 @@ export default function InventoryTable({
                               />
                             ) : (
                               <div className={`text-sm font-semibold ${
-                                isLowStock(group.total_stock) ? 'text-warning-600' : 'text-gray-900'
+                                isLowStock(group.total_stock) ? 'text-red-400' : 'text-gray-900'
                               }`}>
                                 {group.total_stock.toLocaleString()}
                               </div>
@@ -1044,7 +1097,7 @@ export default function InventoryTable({
                               </span>
                             ) : firstBatch?.expiry_date ? (
                               <div className="flex flex-col">
-                                <span>{new Date(firstBatch.expiry_date).toLocaleDateString('ko-KR')}</span>
+                                <span>{formatKoreanDate(firstBatch.expiry_date)}</span>
                                 {(() => {
                                   const today = new Date()
                                   const expiry = new Date(firstBatch.expiry_date)
@@ -1064,34 +1117,33 @@ export default function InventoryTable({
                             ) : '-'}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-500">
-                            {new Date(group.latest_updated).toLocaleDateString('ko-KR')}
+                            {formatKoreanDate(group.latest_updated)}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-500">
-                            -
+                            {firstBatch?.last_modified_user?.username || '-'}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              {!isAllSelected && canEditLocation(group.location_id) && user.role === 'master' && (
-                                <button 
-                                  onClick={() => handleEditInventory(firstBatch)}
-                                  className="text-primary-600 hover:text-primary-900"
-                                  title="재고 이동"
-                                  disabled={isEditMode}
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </button>
-                              )}
-                              {user.role === 'master' && (
-                                <button 
-                                  onClick={() => handleDeleteProduct(firstBatch)}
-                                  className="text-red-600 hover:text-red-900"
-                                  title="제품 삭제"
-                                  disabled={isEditMode}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
+                            {hasMultipleBatches ? (
+                              /* 다중 배치 그룹의 메인 row는 작업 버튼 없음 */
+                              <></>
+                            ) : (
+                              /* 단일 배치 제품은 작업 버튼 표시 */
+                              <div className="flex items-center justify-end gap-2">
+                                {!isAllSelected && canEditLocation(group.location_id) && (
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleEditInventory(firstBatch)
+                                    }}
+                                    className="text-primary-600 hover:text-primary-900"
+                                    title="재고 이동"
+                                    disabled={isEditMode}
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </td>
                         </tr>
                         
@@ -1100,7 +1152,7 @@ export default function InventoryTable({
                           <BatchDetails
                             batches={group.batches}
                             isExpanded={isExpanded}
-                            showImages={showImages}
+                            showImages={showImagesLocal}
                             user={user}
                             isAllSelected={isAllSelected}
                             canEditLocation={canEditLocation}
@@ -1154,6 +1206,7 @@ export default function InventoryTable({
           onInventoryUpdate()
           handleModalClose()
         }}
+        onDelete={handleDeleteProduct}
       />
     </div>
   )
