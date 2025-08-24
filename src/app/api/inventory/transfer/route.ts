@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. 도착 장소의 재고 확인 (없으면 생성)
-    let { data: toInventory, error: toInventoryError } = await supabaseAdmin
+    const { data: toInventory, error: toInventoryError } = await supabaseAdmin
       .from('inventory')
       .select('*')
       .eq('product_id', product_id)

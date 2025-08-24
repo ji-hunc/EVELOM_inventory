@@ -359,7 +359,7 @@ export default function AddProductModal({
               <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
                 <Package className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                 <p>초기 재고가 없습니다.</p>
-                <p className="text-sm">필요시 "배치 추가" 버튼을 클릭하세요.</p>
+                <p className="text-sm">필요시 &quot;배치 추가&quot; 버튼을 클릭하세요.</p>
               </div>
             ) : (
               <div className="space-y-3">

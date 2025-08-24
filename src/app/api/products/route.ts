@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. 위치별 초기 재고가 있는 경우만 인벤토리 생성
-    let inventoryInserts: any[] = []
+    const inventoryInserts: { location_id: string; initial_stock: number; product_id: string }[] = []
     
     if (initial_stocks && Array.isArray(initial_stocks)) {
       for (const stockInfo of initial_stocks) {

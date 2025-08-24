@@ -115,7 +115,7 @@ export default function ProductRegistrationModal({
       }
 
       // 이미지 업로드 (선택사항)
-      let imageUrl = await uploadImage()
+      const imageUrl = await uploadImage()
 
       const url = product ? `/api/products/${encodeURIComponent(product.name)}` : '/api/products'
       const method = product ? 'PUT' : 'POST'

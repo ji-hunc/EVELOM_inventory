@@ -362,7 +362,7 @@ export default function MonthlyView({ selectedLocation, products, locations, cat
   const getMonthSummary = () => {
     let totalIn = 0
     let totalOut = 0
-    let activeDays = new Set<string>()
+    const activeDays = new Set<string>()
 
     productDailyData.forEach(productData => {
       Object.values(productData.dailyData).forEach(dayData => {
