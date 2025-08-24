@@ -31,10 +31,8 @@ export default function LocationTabs({
     return { totalItems, totalStock }
   }
 
-  // 일반 계정은 자신의 위치만, 마스터와 readonly는 모든 위치 
-  const allowedLocations = (user.role === 'master' || user.role === 'readonly')
-    ? locations 
-    : locations.filter(loc => loc.name === user.assigned_location_id)
+  // 모든 계정이 모든 위치를 볼 수 있도록 변경 (편집 권한은 별도 제어)
+  const allowedLocations = locations
 
   // 원하는 순서대로 위치 정렬: 창고, 청량리, AK
   const sortedLocations = [...allowedLocations].sort((a, b) => {

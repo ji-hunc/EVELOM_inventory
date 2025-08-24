@@ -3,8 +3,8 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export async function PUT(request: NextRequest) {
   try {
-    const { username, alert_threshold } = await request.json()
-    console.log('Settings API - Received data:', { username, alert_threshold })
+    const { username, alert_threshold, alert_enabled } = await request.json()
+    console.log('Settings API - Received data:', { username, alert_threshold, alert_enabled })
 
     if (!username || alert_threshold === undefined) {
       return NextResponse.json(
@@ -23,7 +23,7 @@ export async function PUT(request: NextRequest) {
     // 먼저 사용자가 존재하는지 확인
     const { data: existingUser, error: checkError } = await supabaseAdmin
       .from('users')
-      .select('username, alert_threshold')
+      .select('username, alert_threshold, alert_enabled')
       .eq('username', username)
       .single()
 

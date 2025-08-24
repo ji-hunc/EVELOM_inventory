@@ -221,6 +221,9 @@ export default function ProductsPage() {
                     제품코드
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                    원가
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     등록일
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
@@ -231,7 +234,7 @@ export default function ProductsPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {products.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                       등록된 제품이 없습니다.
                     </td>
                   </tr>
@@ -268,6 +271,9 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 font-mono">
                         {product.code || '-'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {product.cost_price ? `$${product.cost_price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {new Date(product.created_at).toLocaleDateString('ko-KR')}
@@ -357,6 +363,9 @@ export default function ProductsPage() {
                         제품코드
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        원가
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                         설명
                       </th>
                     </tr>
@@ -367,6 +376,9 @@ export default function ProductsPage() {
                         <td className="px-4 py-3 text-sm text-gray-900">{item.제품명}</td>
                         <td className="px-4 py-3 text-sm text-gray-900">{item.카테고리}</td>
                         <td className="px-4 py-3 text-sm text-gray-900">{item.제품코드 || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {item.원가 ? `$${item.원가.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-900">{item.설명 || '-'}</td>
                       </tr>
                     ))}

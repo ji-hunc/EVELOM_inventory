@@ -4,7 +4,7 @@ import { getKoreanTime } from '@/lib/date-utils'
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, category_id, description, image_url, code, initial_stocks } = await request.json()
+    const { name, category_id, description, image_url, code, cost_price, initial_stocks } = await request.json()
 
     // 입력 유효성 검사
     if (!name?.trim()) {
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
         code: code?.trim() || null,
         description: description?.trim() || null,
         image_url: image_url || null,
+        cost_price: cost_price || null,
       })
       .select()
       .single()

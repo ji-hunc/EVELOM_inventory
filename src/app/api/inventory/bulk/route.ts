@@ -5,9 +5,7 @@ import { getKoreanDateString, getKoreanTime } from '@/lib/date-utils'
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('Starting bulk stock input...')
     const { stocks }: { stocks: ExcelStockData[] } = await request.json()
-    console.log('Received stocks:', stocks)
 
     if (!stocks || stocks.length === 0) {
       return NextResponse.json({ error: '등록할 재고 데이터가 없습니다.' }, { status: 400 })
@@ -32,9 +30,6 @@ export async function POST(request: NextRequest) {
 
     const productSet = new Set(products?.map(p => p.name) || [])
     const locationSet = new Set(locations?.map(l => l.name) || [])
-
-    console.log('Available products:', Array.from(productSet))
-    console.log('Available locations:', Array.from(locationSet))
 
     // 데이터 검증 및 변환
     const validStocks = []
@@ -104,7 +99,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 재고 일괄 등록
-    console.log('Inserting stocks:', validStocks)
     const { data: insertedStocks, error: insertError } = await supabaseAdmin
       .from('inventory_movements')
       .insert(validStocks)
@@ -114,8 +108,6 @@ export async function POST(request: NextRequest) {
       console.error('Insert error:', insertError)
       throw new Error(`재고 등록 실패: ${insertError.message}`)
     }
-
-    console.log('Successfully inserted stocks:', insertedStocks)
 
     // inventory 테이블 업데이트 또는 삽입
     for (const stock of validStocks) {

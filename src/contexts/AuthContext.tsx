@@ -7,6 +7,8 @@ interface AuthContextType extends AuthState {
   login: (username: string, password: string) => Promise<boolean>
   logout: () => void
   updateUser: (updatedUser: User) => void
+  alertEnabled: boolean
+  toggleAlert: () => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -14,10 +16,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [alertEnabled, setAlertEnabled] = useState(true)
 
   useEffect(() => {
-    // 페이지 로드 시 localStorage에서 사용자 정보 복원
+    // 페이지 로드 시 localStorage에서 사용자 정보 및 알림 설정 복원
     const storedUser = localStorage.getItem('evelom-user')
+    const storedAlertEnabled = localStorage.getItem('evelom-alert-enabled')
+    
     if (storedUser) {
       try {
         const parsedUser = JSON.parse(storedUser)
@@ -27,6 +32,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem('evelom-user')
       }
     }
+    
+    if (storedAlertEnabled !== null) {
+      setAlertEnabled(storedAlertEnabled === 'true')
+    }
+    
     setIsLoading(false)
   }, [])
 
@@ -68,8 +78,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('evelom-user', JSON.stringify(updatedUser))
   }
 
+  const toggleAlert = () => {
+    const newAlertEnabled = !alertEnabled
+    setAlertEnabled(newAlertEnabled)
+    localStorage.setItem('evelom-alert-enabled', newAlertEnabled.toString())
+  }
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, updateUser, alertEnabled, toggleAlert }}>
       {children}
     </AuthContext.Provider>
   )

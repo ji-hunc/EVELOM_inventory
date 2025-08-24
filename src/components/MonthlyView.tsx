@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { InventoryMovement, Product, Location, Category } from '@/types'
 import { ChevronLeft, ChevronRight, Calendar, ArrowUp, ArrowDown, Layout, Grid3X3, Package } from 'lucide-react'
 
@@ -31,10 +31,53 @@ export default function MonthlyView({ selectedLocation, products, locations, cat
   const [isLoading, setIsLoading] = useState(true)
   const [monthDates, setMonthDates] = useState<string[]>([])
   const [viewMode, setViewMode] = useState<'single' | 'category-separated'>('category-separated')
+  const [sortBy, setSortBy] = useState<'name' | 'stock'>('name')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [categorySortStates, setCategorySortStates] = useState<Record<string, {
+    sortBy: 'name' | 'stock'
+    sortOrder: 'asc' | 'desc'
+  }>>({})
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const singleTableRef = useRef<HTMLDivElement>(null)
+  const categoryTablesRef = useRef<Record<string, HTMLDivElement>>({})
+
+  // 현재 날짜로 스크롤 함수
+  const scrollToCurrentDate = () => {
+    const today = new Date()
+    const todayStr = today.toISOString().split('T')[0]
+    
+    // 현재 월의 데이터에 오늘 날짜가 있는지 확인
+    const todayIndex = monthDates.findIndex(date => date === todayStr)
+    
+    if (todayIndex !== -1) {
+      const scrollContainer = singleTableRef.current
+      if (scrollContainer) {
+        // 오늘 날짜 열까지 스크롤 (고정된 제품명, 현재고 컬럼 너비 + 날짜 컬럼들)
+        const scrollPosition = 360 + (todayIndex * 80) // 제품명(240px) + 현재고(120px) = 360px + 날짜컬럼들(80px each)
+        scrollContainer.scrollLeft = scrollPosition
+      }
+      
+      // 카테고리 테이블들도 같이 스크롤
+      Object.values(categoryTablesRef.current).forEach(container => {
+        if (container) {
+          const scrollPosition = 360 + (todayIndex * 80)
+          container.scrollLeft = scrollPosition
+        }
+      })
+    }
+  }
 
   useEffect(() => {
     loadMonthlyData()
   }, [currentDate, selectedLocation])
+
+  // 데이터 로딩 완료 후 현재 날짜로 스크롤
+  useEffect(() => {
+    if (!isLoading && monthDates.length > 0) {
+      // 약간의 지연을 주고 스크롤 (DOM 렌더링 완료 후)
+      setTimeout(scrollToCurrentDate, 100)
+    }
+  }, [isLoading, monthDates])
 
   const loadMonthlyData = async () => {
     try {
@@ -209,6 +252,53 @@ export default function MonthlyView({ selectedLocation, products, locations, cat
     setCurrentDate(newDate)
   }
 
+  const handleSort = (column: 'name' | 'stock') => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(column)
+      setSortOrder('asc')
+    }
+  }
+
+  const handleCategorySort = (categoryName: string, column: 'name' | 'stock') => {
+    const currentState = categorySortStates[categoryName] || { sortBy: 'name', sortOrder: 'asc' }
+    
+    if (currentState.sortBy === column) {
+      setCategorySortStates(prev => ({
+        ...prev,
+        [categoryName]: {
+          ...currentState,
+          sortOrder: currentState.sortOrder === 'asc' ? 'desc' : 'asc'
+        }
+      }))
+    } else {
+      setCategorySortStates(prev => ({
+        ...prev,
+        [categoryName]: {
+          sortBy: column,
+          sortOrder: 'asc'
+        }
+      }))
+    }
+  }
+
+  const sortedProductData = [...productDailyData].sort((a, b) => {
+    let compareValue = 0
+    if (sortBy === 'name') {
+      compareValue = a.product.name.localeCompare(b.product.name)
+    } else if (sortBy === 'stock') {
+      compareValue = (a.product.currentStock || 0) - (b.product.currentStock || 0)
+    }
+    return sortOrder === 'desc' ? -compareValue : compareValue
+  })
+
+  const handleDateSelect = (year: number, month: number) => {
+    const newDate = new Date(year, month - 1, 1)
+    setCurrentDate(newDate)
+    setShowDatePicker(false)
+  }
+
   const formatDateHeader = (dateStr: string) => {
     const date = new Date(dateStr)
     const currentMonth = currentDate.getMonth()
@@ -306,14 +396,29 @@ export default function MonthlyView({ selectedLocation, products, locations, cat
         const category = categories.find(cat => cat.name === categoryName)
         if (!category) return acc
         
+        // 각 카테고리별로 독립적인 정렬 적용
         const categoryProducts = productDailyData.filter(productData => 
           productData.product.category?.name === categoryName
         )
         
-        if (categoryProducts.length > 0) {
+        // 해당 카테고리의 정렬 상태 가져오기
+        const categorySort = categorySortStates[categoryName] || { sortBy: 'name', sortOrder: 'asc' }
+        
+        // 카테고리별 정렬 적용
+        const sortedCategoryProducts = [...categoryProducts].sort((a, b) => {
+          let compareValue = 0
+          if (categorySort.sortBy === 'name') {
+            compareValue = a.product.name.localeCompare(b.product.name)
+          } else if (categorySort.sortBy === 'stock') {
+            compareValue = (a.product.currentStock || 0) - (b.product.currentStock || 0)
+          }
+          return categorySort.sortOrder === 'desc' ? -compareValue : compareValue
+        })
+        
+        if (sortedCategoryProducts.length > 0) {
           acc[categoryName] = {
             category,
-            products: categoryProducts
+            products: sortedCategoryProducts
           }
         }
         return acc
@@ -335,10 +440,18 @@ export default function MonthlyView({ selectedLocation, products, locations, cat
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <Calendar className="w-5 h-5" />
-              {currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월 제품별 일일 입출고 현황
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-bold text-gray-900">
+                {currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월
+              </h3>
+              <button
+                onClick={() => setShowDatePicker(true)}
+                className="p-1 hover:bg-gray-100 rounded-md"
+                title="월 선택"
+              >
+                <Calendar className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
             <button
               onClick={() => navigateMonth('next')}
               className="p-2 hover:bg-gray-100 rounded-md"
@@ -347,41 +460,29 @@ export default function MonthlyView({ selectedLocation, products, locations, cat
             </button>
           </div>
           
-          <div className="flex items-center gap-4">
-            {/* 보기 모드 토글 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                보기 방식
-              </label>
-              <div className="flex items-center gap-1 bg-gray-100 rounded-md p-1">
-                <button
-                  onClick={() => setViewMode('category-separated')}
-                  className={`flex items-center gap-2 px-3 py-2 rounded text-sm font-medium ${
-                    viewMode === 'category-separated' 
-                      ? 'bg-white text-primary-600 shadow' 
-                      : 'text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  <Grid3X3 className="w-4 h-4" />
-                  카테고리
-                </button>
-                <button
-                  onClick={() => setViewMode('single')}
-                  className={`flex items-center gap-2 px-3 py-2 rounded text-sm font-medium ${
-                    viewMode === 'single' 
-                      ? 'bg-white text-primary-600 shadow' 
-                      : 'text-gray-600 hover:text-gray-800'
-                  }`}
-                >
-                  <Layout className="w-4 h-4" />
-                  통합
-                </button>
-              </div>
-            </div>
-            
-            <div className="text-sm text-gray-500">
-              선택된 위치: {locations.find(l => l.name === selectedLocation)?.name || '전체'}
-            </div>
+          <div className="flex items-center gap-1 bg-gray-100 rounded-md p-1">
+            <button
+              onClick={() => setViewMode('category-separated')}
+              className={`flex items-center gap-2 px-3 py-2 rounded text-sm font-medium ${
+                viewMode === 'category-separated' 
+                  ? 'bg-white text-primary-600 shadow' 
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <Grid3X3 className="w-4 h-4" />
+              카테고리
+            </button>
+            <button
+              onClick={() => setViewMode('single')}
+              className={`flex items-center gap-2 px-3 py-2 rounded text-sm font-medium ${
+                viewMode === 'single' 
+                  ? 'bg-white text-primary-600 shadow' 
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <Layout className="w-4 h-4" />
+              통합
+            </button>
           </div>
         </div>
       </div>
@@ -417,12 +518,33 @@ export default function MonthlyView({ selectedLocation, products, locations, cat
             <p className="text-sm text-gray-500 mt-1">가로로 스크롤하여 전체 월간 데이터를 확인하세요</p>
           </div>
           
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200" style={{ minWidth: `${150 + monthDates.length * 80}px` }}>
+          <div className="overflow-x-auto" ref={singleTableRef}>
+            <table className="min-w-full divide-y divide-gray-200" style={{ minWidth: `${384 + monthDates.length * 80}px` }}>
               <thead className="bg-gray-50 sticky top-0">
                 <tr>
-                  <th className="sticky left-0 z-10 bg-gray-50 border-r border-gray-200 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
-                    제품명
+                  <th 
+                    className="sticky left-0 z-20 bg-gray-50 border-r border-gray-300 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    style={{ width: '240px', minWidth: '240px', maxWidth: '240px' }}
+                    onClick={() => handleSort('name')}
+                  >
+                    <div className="flex items-center gap-1">
+                      제품명
+                      {sortBy === 'name' && (
+                        sortOrder === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    className="sticky z-20 bg-gray-50 border-r border-gray-300 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    style={{ left: '240px', width: '120px', minWidth: '120px', maxWidth: '120px' }}
+                    onClick={() => handleSort('stock')}
+                  >
+                    <div className="flex items-center gap-1">
+                      현재고
+                      {sortBy === 'stock' && (
+                        sortOrder === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                      )}
+                    </div>
                   </th>
                   {monthDates.map(dateStr => {
                     const dateInfo = formatDateHeader(dateStr)
@@ -452,17 +574,25 @@ export default function MonthlyView({ selectedLocation, products, locations, cat
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {productDailyData.map((productData, index) => (
+                {sortedProductData.map((productData, index) => (
                   <tr key={productData.product.name} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                    <td className="sticky left-0 z-10 bg-inherit border-r border-gray-200 px-4 py-3">
+                    <td 
+                      className="sticky left-0 z-10 bg-inherit border-r border-gray-300 px-4 py-3"
+                      style={{ width: '240px', minWidth: '240px', maxWidth: '240px' }}
+                    >
                       <div className="text-sm font-medium text-gray-900">
                         {productData.product.name}
                       </div>
                       <div className="text-xs text-gray-500">
                         {productData.product.category?.name}
                       </div>
-                      <div className="text-xs font-semibold text-blue-600 mt-1">
-                        현재고: {productData.product.currentStock?.toLocaleString() || 0}
+                    </td>
+                    <td 
+                      className="sticky z-10 bg-inherit border-r border-gray-300 px-4 py-3"
+                      style={{ left: '240px', width: '120px', minWidth: '120px', maxWidth: '120px' }}
+                    >
+                      <div className="text-sm font-semibold text-blue-600">
+                        {productData.product.currentStock?.toLocaleString() || 0}
                       </div>
                     </td>
                     {monthDates.map(dateStr => {
@@ -522,12 +652,42 @@ export default function MonthlyView({ selectedLocation, products, locations, cat
                   <p className="text-sm text-gray-500 mt-1">가로로 스크롤하여 전체 월간 데이터를 확인하세요</p>
                 </div>
                 
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200" style={{ minWidth: `${150 + monthDates.length * 80}px` }}>
+                <div 
+                  className="overflow-x-auto"
+                  ref={(el) => {
+                    if (el) {
+                      categoryTablesRef.current[categoryName] = el
+                    }
+                  }}
+                >
+                  <table className="min-w-full divide-y divide-gray-200" style={{ minWidth: `${384 + monthDates.length * 80}px` }}>
                     <thead className="bg-gray-50 sticky top-0">
                       <tr>
-                        <th className="sticky left-0 z-10 bg-gray-50 border-r border-gray-200 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
-                          제품명
+                        <th 
+                          className="sticky left-0 z-20 bg-gray-50 border-r border-gray-300 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                          style={{ width: '240px', minWidth: '240px', maxWidth: '240px' }}
+                          onClick={() => handleCategorySort(categoryName, 'name')}
+                        >
+                          <div className="flex items-center gap-1">
+                            제품명
+                            {(categorySortStates[categoryName]?.sortBy === 'name' || !categorySortStates[categoryName]) && (
+                              (categorySortStates[categoryName]?.sortOrder || 'asc') === 'asc' ? 
+                              <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                            )}
+                          </div>
+                        </th>
+                        <th 
+                          className="sticky z-20 bg-gray-50 border-r border-gray-300 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                          style={{ left: '240px', width: '120px', minWidth: '120px', maxWidth: '120px' }}
+                          onClick={() => handleCategorySort(categoryName, 'stock')}
+                        >
+                          <div className="flex items-center gap-1">
+                            현재고
+                            {categorySortStates[categoryName]?.sortBy === 'stock' && (
+                              categorySortStates[categoryName].sortOrder === 'asc' ? 
+                              <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                            )}
+                          </div>
                         </th>
                         {monthDates.map(dateStr => {
                           const dateInfo = formatDateHeader(dateStr)
@@ -559,15 +719,20 @@ export default function MonthlyView({ selectedLocation, products, locations, cat
                     <tbody className="bg-white divide-y divide-gray-200">
                       {categoryData.products.map((productData, index) => (
                         <tr key={productData.product.name} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="sticky left-0 z-10 bg-inherit border-r border-gray-200 px-4 py-3">
+                          <td 
+                            className="sticky left-0 z-10 bg-inherit border-r border-gray-300 px-4 py-3"
+                            style={{ width: '240px', minWidth: '240px', maxWidth: '240px' }}
+                          >
                             <div className="text-sm font-medium text-gray-900">
                               {productData.product.name}
                             </div>
-                            <div className="text-xs text-gray-500">
-                              {productData.product.code || '-'}
-                            </div>
-                            <div className="text-xs font-semibold text-blue-600 mt-1">
-                              현재고: {productData.product.currentStock?.toLocaleString() || 0}
+                          </td>
+                          <td 
+                            className="sticky z-10 bg-inherit border-r border-gray-300 px-4 py-3"
+                            style={{ left: '240px', width: '120px', minWidth: '120px', maxWidth: '120px' }}
+                          >
+                            <div className="text-sm font-semibold text-blue-600">
+                              {productData.product.currentStock?.toLocaleString() || 0}
                             </div>
                           </td>
                           {monthDates.map(dateStr => {
@@ -597,6 +762,71 @@ export default function MonthlyView({ selectedLocation, products, locations, cat
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* 월 선택 모달 */}
+      {showDatePicker && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                연월 선택
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">연도</label>
+                  <select
+                    value={currentDate.getFullYear()}
+                    onChange={(e) => handleDateSelect(parseInt(e.target.value), currentDate.getMonth() + 1)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    {Array.from({ length: 10 }, (_, i) => {
+                      const year = new Date().getFullYear() - 5 + i
+                      return (
+                        <option key={year} value={year}>
+                          {year}년
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">월</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const month = i + 1
+                      const isSelected = currentDate.getMonth() + 1 === month
+                      return (
+                        <button
+                          key={month}
+                          onClick={() => handleDateSelect(currentDate.getFullYear(), month)}
+                          className={`px-3 py-2 text-sm font-medium rounded-md ${
+                            isSelected
+                              ? 'bg-primary-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {month}월
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowDatePicker(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

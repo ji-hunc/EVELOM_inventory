@@ -26,6 +26,10 @@ export default function Dashboard() {
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [showStockInputModal, setShowStockInputModal] = useState(false);
   const [showStockTransferModal, setShowStockTransferModal] = useState(false);
+  const [pendingLocation, setPendingLocation] = useState<string>("");
+  const [showLocationChangeModal, setShowLocationChangeModal] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -50,6 +54,31 @@ export default function Dashboard() {
       setSelectedLocation(user.assigned_location_id);
     }
   }, [user, locations]);
+
+  const handleLocationChange = (newLocation: string) => {
+    if (isEditMode && hasUnsavedChanges) {
+      setPendingLocation(newLocation);
+      setShowLocationChangeModal(true);
+    } else {
+      setSelectedLocation(newLocation);
+      // 위치 변경시 아코디언 상태 초기화
+      setIsEditMode(false);
+      setHasUnsavedChanges(false);
+    }
+  };
+
+  const confirmLocationChange = () => {
+    setSelectedLocation(pendingLocation);
+    setIsEditMode(false);
+    setHasUnsavedChanges(false);
+    setShowLocationChangeModal(false);
+    setPendingLocation("");
+  };
+
+  const cancelLocationChange = () => {
+    setShowLocationChangeModal(false);
+    setPendingLocation("");
+  };
 
   const loadInitialData = async () => {
     try {
@@ -93,11 +122,8 @@ export default function Dashboard() {
         return;
       }
 
-      // 마스터와 readonly는 전체 데이터 로드, 일반 사용자는 특정 사용자 데이터 로드
-      const apiUrl =
-        (user.role === "master" || user.role === "readonly")
-          ? "/api/inventory"
-          : `/api/inventory?userId=${user.username}`;
+      // 모든 사용자가 전체 데이터를 로드할 수 있도록 변경
+      const apiUrl = "/api/inventory";
 
       const response = await fetch(apiUrl);
       if (!response.ok) {
@@ -106,33 +132,21 @@ export default function Dashboard() {
 
       const { data } = await response.json();
 
-      // 일반 계정은 자신의 위치만 필터링
-      let filteredLocations = data.locations;
-      let filteredInventory = data.inventory;
-
-      if (user && user.role === "general" && user.assigned_location_id) {
-        filteredLocations = data.locations.filter(
-          (loc: any) => loc.name === user.assigned_location_id
-        );
-        filteredInventory = data.inventory.filter(
-          (item: any) => item.location_id === user.assigned_location_id
-        );
-      }
+      // 모든 위치와 재고 데이터를 로드 (일반 계정도 전체 조회 가능)
+      const filteredLocations = data.locations;
+      const filteredInventory = data.inventory;
 
       setLocations(filteredLocations);
       setCategories(data.categories);
       setProducts(data.products);
       setInventory(filteredInventory);
 
-      // 일반 계정은 자신의 할당된 위치만, 마스터는 창고를 기본 선택
+      // 일반 계정은 자신의 할당된 위치만, 마스터와 readonly는 전체위치를 기본 선택
       if (filteredLocations && filteredLocations.length > 0 && user) {
         if (user.role === "general" && user.assigned_location_id) {
           setSelectedLocation(user.assigned_location_id);
-        } else if (user.role === "master") {
-          const warehouse = filteredLocations.find(
-            (loc: any) => loc.name === "창고"
-          );
-          setSelectedLocation(warehouse?.name || filteredLocations[0].name);
+        } else if (user.role === "master" || user.role === "readonly") {
+          setSelectedLocation("all");
         }
       }
     } catch (error) {
@@ -159,7 +173,9 @@ export default function Dashboard() {
   );
 
   // 마스터와 readonly는 전체 탭 사용 가능, 일반 계정은 자신의 위치만
-  const isAllSelected = selectedLocation === "all" && (user.role === "master" || user.role === "readonly");
+  const isAllSelected =
+    selectedLocation === "all" &&
+    (user.role === "master" || user.role === "readonly");
   const filteredInventory = isAllSelected
     ? inventory
     : inventory.filter((item) => item.location_id === selectedLocation);
@@ -209,7 +225,7 @@ export default function Dashboard() {
           <LocationTabs
             locations={locations}
             selectedLocation={selectedLocation}
-            onLocationSelect={setSelectedLocation}
+            onLocationSelect={handleLocationChange}
             inventory={inventory}
             user={user}
           />
@@ -218,7 +234,8 @@ export default function Dashboard() {
             <div className="mb-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-gray-900">
-                  {isAllSelected ? "전체 위치" : selectedLocationData?.name} 재고 현황
+                  {isAllSelected ? "전체 위치" : selectedLocationData?.name}{" "}
+                  재고 현황
                 </h2>
                 <div className="flex items-center gap-3">
                   {user.role !== "readonly" && (
@@ -301,6 +318,9 @@ export default function Dashboard() {
                 onInventoryUpdate={loadInitialData}
                 selectedLocation={selectedLocation}
                 isAllSelected={isAllSelected}
+                externalEditMode={isEditMode}
+                onEditModeChange={setIsEditMode}
+                onUnsavedChanges={setHasUnsavedChanges}
               />
             ) : viewMode === "transactions" ? (
               <TransactionView
@@ -340,6 +360,37 @@ export default function Dashboard() {
         inventory={inventory}
         onTransferCompleted={loadInitialData}
       />
+
+      {/* 위치 변경 확인 모달 */}
+      {showLocationChangeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                저장하지 않은 변경사항이 있습니다
+              </h3>
+              <p className="text-gray-600 mb-6">
+                현재 수정하신 데이터가 저장되지 않았습니다. 다른 위치로
+                이동하시면 변경사항이 모두 사라집니다. 그래도 이동하시겠습니까?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelLocationChange}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium"
+                >
+                  아니오
+                </button>
+                <button
+                  onClick={confirmLocationChange}
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md font-medium"
+                >
+                  네
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

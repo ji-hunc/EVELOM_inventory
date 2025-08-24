@@ -35,6 +35,7 @@ export interface Product {
   image_url?: string
   description?: string
   unit: string
+  cost_price?: number  // 원가 (optional)
   is_active: boolean
   created_at: string
   updated_at: string
@@ -99,6 +100,7 @@ export interface ProductFormData {
   image_url?: string
   description?: string
   unit: string
+  cost_price?: number  // 원가 (optional)
 }
 
 // 배치코드 관련 타입

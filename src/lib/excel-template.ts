@@ -4,8 +4,8 @@ export interface ExcelProductData {
   제품명: string
   카테고리: string
   제품코드?: string
-  단위?: string
   설명?: string
+  원가?: number
 }
 
 export function downloadExcelTemplate() {
@@ -15,22 +15,22 @@ export function downloadExcelTemplate() {
       제품명: '클렌징 밤 100g',
       카테고리: '정제품',
       제품코드: 'CB100',
-      단위: 'EA',
-      설명: '메이크업 제거용 클렌징 밤'
+      설명: '메이크업 제거용 클렌징 밤',
+      원가: 18.50
     },
     {
       제품명: '토너 30ml',
       카테고리: '샘플',
       제품코드: 'T30',
-      단위: 'EA',
-      설명: '수분 공급 토너 샘플'
+      설명: '수분 공급 토너 샘플',
+      원가: 5.75
     },
     {
       제품명: '립밤 4g',
       카테고리: '사셰',
       제품코드: '',
-      단위: 'EA',
-      설명: ''
+      설명: '',
+      원가: 3.25
     }
   ]
 
@@ -43,8 +43,8 @@ export function downloadExcelTemplate() {
     { width: 20 }, // 제품명
     { width: 15 }, // 카테고리
     { width: 15 }, // 제품코드
-    { width: 10 }, // 단위
-    { width: 30 }  // 설명
+    { width: 30 }, // 설명
+    { width: 15 }  // 원가
   ]
 
   XLSX.utils.book_append_sheet(workbook, worksheet, '제품목록')
@@ -135,8 +135,6 @@ export function parseStockExcelFile(file: File): Promise<ExcelStockData[]> {
 
         const jsonData = XLSX.utils.sheet_to_json(worksheet) as ExcelStockData[]
         
-        console.log('파싱된 엑셀 데이터:', jsonData) // 디버깅용
-        
         if (!jsonData || jsonData.length === 0) {
           reject(new Error('엑셀 파일에 데이터가 없습니다.'))
           return
@@ -172,11 +170,8 @@ export function parseStockExcelFile(file: File): Promise<ExcelStockData[]> {
           return
         }
 
-        console.log('유효한 데이터:', validData) // 디버깅용
-
         resolve(validData)
       } catch (error) {
-        console.error('파싱 오류 상세:', error) // 디버깅용
         reject(new Error(`엑셀 파일 파싱 중 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`))
       }
     }
@@ -206,7 +201,10 @@ export function parseExcelFile(file: File): Promise<ExcelProductData[]> {
         const validData = jsonData.filter(row => {
           return row.제품명 && row.제품명.trim() !== '' && 
                  row.카테고리 && row.카테고리.trim() !== ''
-        })
+        }).map(row => ({
+          ...row,
+          원가: row.원가 && !isNaN(Number(row.원가)) ? Number(row.원가) : undefined
+        }))
 
         resolve(validData)
       } catch (error) {

@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { X, Settings, AlertTriangle } from 'lucide-react'
+import { X, Settings, AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import { User } from '@/types'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface SettingsModalProps {
   isOpen: boolean
@@ -17,6 +18,7 @@ export default function SettingsModal({
   user,
   onSettingsUpdate
 }: SettingsModalProps) {
+  const { alertEnabled, toggleAlert } = useAuth()
   const [alertThreshold, setAlertThreshold] = useState(user.alert_threshold)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
@@ -93,8 +95,40 @@ export default function SettingsModal({
             </div>
           </div>
 
+          {/* 재고 알림 on/off */}
+          <div className="border-b border-gray-200 pb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {alertEnabled ? (
+                  <Eye className="w-4 h-4 text-primary-500" />
+                ) : (
+                  <EyeOff className="w-4 h-4 text-gray-400" />
+                )}
+                <div>
+                  <div className="text-sm font-medium text-gray-700">재고 부족 알림 표시</div>
+                  <div className="text-xs text-gray-500">
+                    재고가 부족한 항목의 빨간색 배경 표시를 {alertEnabled ? '켜기' : '끄기'}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={toggleAlert}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                  alertEnabled ? 'bg-primary-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    alertEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
           {/* 재고 부족 알림 임계치 */}
-          <div>
+          <div className={alertEnabled ? '' : 'opacity-50 pointer-events-none'}>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-warning-500" />
@@ -118,17 +152,19 @@ export default function SettingsModal({
           </div>
 
           {/* 알림 미리보기 */}
-          <div className="bg-warning-50 border border-warning-200 p-4 rounded-lg">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-warning-500 mt-0.5" />
-              <div>
-                <div className="text-sm font-medium text-warning-700">미리보기</div>
-                <div className="text-sm text-warning-600 mt-1">
-                  재고가 {alertThreshold}개 이하인 품목들이 이렇게 표시됩니다.
+          {alertEnabled && (
+            <div className="bg-warning-50 border border-warning-200 p-4 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-warning-500 mt-0.5" />
+                <div>
+                  <div className="text-sm font-medium text-warning-700">미리보기</div>
+                  <div className="text-sm text-warning-600 mt-1">
+                    재고가 {alertThreshold}개 이하인 품목들이 이렇게 표시됩니다.
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {error && (
             <div className="bg-error-50 border border-error-200 text-error-600 px-4 py-3 rounded-md text-sm">

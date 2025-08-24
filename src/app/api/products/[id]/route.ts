@@ -11,7 +11,7 @@ export async function PUT(
 ) {
   try {
     const { id: productId } = await params
-    const { name, category_id, description, image_url, code } = await request.json()
+    const { name, category_id, description, image_url, code, cost_price } = await request.json()
 
     // 입력 유효성 검사
     if (!name?.trim()) {
@@ -37,6 +37,7 @@ export async function PUT(
         code: code?.trim() || null,
         description: description?.trim() || null,
         image_url: image_url || null,
+        cost_price: cost_price || null,
         updated_at: new Date().toISOString()
       })
       .eq('name', productId) // name을 PK로 사용

@@ -55,7 +55,8 @@ export async function POST(request: NextRequest) {
         category_id: product.카테고리, // 카테고리 이름을 직접 사용
         code: product.제품코드 || null,
         description: product.설명 || null,
-        unit: product.단위 || 'EA' // 엑셀에서 단위를 지정하거나 기본값 EA 사용
+        unit: 'EA', // 기본값 EA 사용
+        cost_price: product.원가 || null
       })
     }
 

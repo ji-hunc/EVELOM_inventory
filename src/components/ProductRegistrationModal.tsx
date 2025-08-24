@@ -24,7 +24,8 @@ export default function ProductRegistrationModal({
     category_id: '',
     code: '',
     description: '',
-    image_url: ''
+    image_url: '',
+    cost_price: ''
   })
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState('')
@@ -38,7 +39,8 @@ export default function ProductRegistrationModal({
         category_id: product.category_id,
         code: product.code || '',
         description: product.description || '',
-        image_url: product.image_url || ''
+        image_url: product.image_url || '',
+        cost_price: product.cost_price?.toString() || ''
       })
       setImagePreview(product.image_url || '')
     } else if (isOpen) {
@@ -47,7 +49,8 @@ export default function ProductRegistrationModal({
         category_id: '',
         code: '',
         description: '',
-        image_url: ''
+        image_url: '',
+        cost_price: ''
       })
       setImagePreview('')
     }
@@ -127,7 +130,8 @@ export default function ProductRegistrationModal({
           category_id: formData.category_id,
           code: formData.code.trim(),
           description: formData.description.trim(),
-          image_url: imageUrl
+          image_url: imageUrl,
+          cost_price: formData.cost_price ? parseFloat(formData.cost_price) : null
         })
       })
 
@@ -152,7 +156,8 @@ export default function ProductRegistrationModal({
       category_id: '',
       code: '',
       description: '',
-      image_url: ''
+      image_url: '',
+      cost_price: ''
     })
     setImageFile(null)
     setImagePreview('')
@@ -226,6 +231,21 @@ export default function ProductRegistrationModal({
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
                 className="input-field"
                 placeholder="제품 코드 (선택사항)"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                원가
+              </label>
+              <input
+                type="number"
+                value={formData.cost_price}
+                onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })}
+                className="input-field"
+                placeholder="원가 (USD, 선택사항)"
+                min="0"
+                step="0.01"
               />
             </div>
 
