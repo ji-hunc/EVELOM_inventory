@@ -183,7 +183,7 @@ export default function StatsPage() {
     const categoryMap: Record<string, { totalStock: number; itemCount: number; movementCount: number }> = {}
     
     inventory.forEach(item => {
-      const categoryName = item.product?.category?.name || item.category?.name || '알 수 없음'
+      const categoryName = item.product?.category?.name || '알 수 없음'
       if (!categoryMap[categoryName]) {
         categoryMap[categoryName] = { totalStock: 0, itemCount: 0, movementCount: 0 }
       }
@@ -235,7 +235,7 @@ export default function StatsPage() {
 
   const processSlowMovingProducts = (movements: InventoryMovement[], inventory: Inventory[]) => {
     const now = new Date()
-    const slowMoving: { name: string; daysSinceLastMovement: number; currentStock: number; location: string; category: string }[] = []
+    const slowMoving: { name: string; category: string; lastMovement: string; daysIdle: number; currentStock: number; location: string; daysSinceLastMovement: number }[] = []
     
     inventory.forEach(item => {
       const productMovements = movements.filter(m => m.product_id === item.product_id)
@@ -243,7 +243,7 @@ export default function StatsPage() {
       if (productMovements.length === 0) {
         slowMoving.push({
           name: item.product_id,
-          category: item.product?.category?.name || item.category?.name || '알 수 없음',
+          category: item.product?.category?.name || '알 수 없음',
           lastMovement: '이동 기록 없음',
           daysIdle: 999,
           currentStock: item.current_stock,
@@ -260,7 +260,7 @@ export default function StatsPage() {
         if (daysSinceLastMovement > 30) {
           slowMoving.push({
             name: item.product_id,
-            category: item.product?.category?.name || item.category?.name || '알 수 없음',
+            category: item.product?.category?.name || '알 수 없음',
             lastMovement: new Date(lastMovement.movement_date).toLocaleDateString('ko-KR'),
             daysIdle: daysSinceLastMovement,
             currentStock: item.current_stock,
@@ -278,7 +278,7 @@ export default function StatsPage() {
     const categoryAnalysis: Record<string, { totalStock: number; totalMovement: number }> = {}
     
     inventory.forEach(item => {
-      const category = item.product?.category?.name || item.category?.name || '알 수 없음'
+      const category = item.product?.category?.name || '알 수 없음'
       if (!categoryAnalysis[category]) {
         categoryAnalysis[category] = { totalStock: 0, totalMovement: 0 }
       }
@@ -301,7 +301,7 @@ export default function StatsPage() {
 
   const processExpiryAlerts = (inventory: Inventory[]) => {
     const now = new Date()
-    const alerts: { product: string; location: string; batchCode: string; expiryDate: string; daysUntilExpiry: number; currentStock: number; status: string }[] = []
+    const alerts: { name: string; batchCode: string; location: string; estimatedExpiry: string; daysLeft: number }[] = []
     
     inventory.forEach(item => {
       if (item.batch_code && item.batch_code.length >= 4) {

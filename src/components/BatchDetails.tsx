@@ -173,7 +173,7 @@ export default function BatchDetails({
               {formatKoreanDate(batch.last_updated)}
             </td>
             <td className="px-4 py-3 text-sm text-gray-500" style={showImages ? {width: '110px'} : undefined}>
-              {batch.last_modified_user?.username || '-'}
+              {batch.last_modified_by_user?.username || '-'}
             </td>
             <td className="px-4 py-3 text-right" style={showImages ? {width: '90px'} : undefined}>
               <div className="flex items-center justify-end gap-2">

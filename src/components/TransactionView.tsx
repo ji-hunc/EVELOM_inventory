@@ -235,7 +235,7 @@ export default function TransactionView({
             >
               <option value="all">전체</option>
               {categories.map((category, index) => (
-                <option key={category.id || `category-${index}`} value={category.id}>
+                <option key={category.name || `category-${index}`} value={category.name}>
                   {category.name}
                 </option>
               ))}
@@ -254,7 +254,7 @@ export default function TransactionView({
             >
               <option value="all">전체</option>
               {products.map((product, index) => (
-                <option key={product.id || `product-${index}`} value={product.id}>
+                <option key={product.name || `product-${index}`} value={product.name}>
                   {product.name}
                 </option>
               ))}
@@ -417,9 +417,9 @@ export default function TransactionView({
                       {movement.movement_type === 'transfer' ? (
                         <div className="space-y-1">
                           <div>{movement.notes || '-'}</div>
-                          {(movement.transfer_from || movement.transfer_to) && (
+                          {(movement.from_location_id || movement.to_location_id) && (
                             <div className="text-xs text-orange-600">
-                              {movement.transfer_from} → {movement.transfer_to}
+                              {movement.from_location_id} → {movement.to_location_id}
                             </div>
                           )}
                         </div>

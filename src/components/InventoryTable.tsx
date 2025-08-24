@@ -397,7 +397,7 @@ export default function InventoryTable({
 
   const handleExportExcel = () => {
     const locationName =
-      locations.find((l) => l.id === selectedInventory?.location_id)?.name ||
+      locations.find((l) => l.name === selectedInventory?.location_id)?.name ||
       "전체";
     exportInventoryToExcel(filteredInventory, locationName);
   };
@@ -526,7 +526,6 @@ export default function InventoryTable({
         .filter(Boolean);
 
       if (updates.length === 0) {
-        setIsEditMode(false);
         return;
       }
 
@@ -907,7 +906,7 @@ export default function InventoryTable({
                           {formatKoreanDate(group.latest_updated)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
-                          {firstBatch?.last_modified_user?.username || "-"}
+                          {firstBatch?.last_modified_by_user?.username || "-"}
                         </td>
                         <td className="px-4 py-3 text-right">
                           {hasMultipleBatches ? (
@@ -1032,8 +1031,8 @@ export default function InventoryTable({
                 <option value="all">전체</option>
                 {categories.map((category, index) => (
                   <option
-                    key={category.id || `category-${index}`}
-                    value={category.id}
+                    key={category.name || `category-${index}`}
+                    value={category.name}
                   >
                     {category.name}
                   </option>
@@ -1419,7 +1418,7 @@ export default function InventoryTable({
                             {formatKoreanDate(group.latest_updated)}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-500">
-                            {firstBatch?.last_modified_user?.username || "-"}
+                            {firstBatch?.last_modified_by_user?.username || "-"}
                           </td>
                           <td className="px-4 py-3 text-right">
                             {hasMultipleBatches ? (

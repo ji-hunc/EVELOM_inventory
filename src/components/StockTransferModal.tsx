@@ -206,7 +206,7 @@ export default function StockTransferModal({
                 >
                   <option value="">발송 장소 선택</option>
                   {locations.map((location, index) => (
-                    <option key={location.id || `from-location-${index}`} value={location.name}>
+                    <option key={location.name || `from-location-${index}`} value={location.name}>
                       {location.name}
                     </option>
                   ))}
@@ -231,7 +231,7 @@ export default function StockTransferModal({
                   {locations
                     .filter(location => location.name !== formData.fromLocation)
                     .map((location, index) => (
-                    <option key={location.id || `to-location-${index}`} value={location.name}>
+                    <option key={location.name || `to-location-${index}`} value={location.name}>
                       {location.name}
                     </option>
                   ))}

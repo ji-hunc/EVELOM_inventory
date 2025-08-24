@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { InventoryMovement, Product, Location, Category } from '@/types'
+import { InventoryMovement, Product, Location, Category, Inventory } from '@/types'
 import { ChevronLeft, ChevronRight, Calendar, ArrowUp, ArrowDown, Layout, Grid3X3, Package } from 'lucide-react'
 
 interface MonthlyViewProps {
@@ -221,7 +221,7 @@ export default function MonthlyView({ selectedLocation, products, locations, cat
           
           if (index === 0) {
             // 가장 최신 날짜는 현재고
-            dayData.finalStock = runningStock
+            dayData.finalStock = runningStock || 0
           } else {
             // 이전 날짜의 최종 재고 = 다음 날 최종 재고 - 다음 날 입고 + 다음 날 출고
             const nextDate = sortedDates[index - 1]

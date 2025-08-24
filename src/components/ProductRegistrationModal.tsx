@@ -214,7 +214,7 @@ export default function ProductRegistrationModal({
               >
                 <option value="">카테고리 선택</option>
                 {categories.map((category, index) => (
-                  <option key={category.id || `category-${index}`} value={category.id}>
+                  <option key={category.name || `category-${index}`} value={category.name}>
                     {category.name}
                   </option>
                 ))}

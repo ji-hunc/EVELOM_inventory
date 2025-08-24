@@ -4,7 +4,7 @@ import { Inventory } from '@/types'
 export interface GroupedInventoryItem {
   product_id: string
   location_id: string
-  product?: { name: string; category: { name: string } | null }
+  product?: { name: string; category?: { name: string } | null; image_url?: string; code?: string }
   location?: { name: string }
   total_stock: number
   batch_count: number

@@ -358,7 +358,7 @@ export default function StockInputModal({
             >
               <option value="">위치를 선택하세요</option>
               {locations.map((location, index) => (
-                <option key={location.id || `location-${index}`} value={location.name}>
+                <option key={location.name || `location-${index}`} value={location.name}>
                   {location.name}
                 </option>
               ))}

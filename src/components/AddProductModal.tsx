@@ -229,7 +229,7 @@ export default function AddProductModal({
               >
                 <option value="">카테고리 선택</option>
                 {categories.map((category, index) => (
-                  <option key={category.id || `category-${index}`} value={category.id}>
+                  <option key={category.name || `category-${index}`} value={category.name}>
                     {category.name}
                   </option>
                 ))}
@@ -377,7 +377,7 @@ export default function AddProductModal({
                       >
                         <option value="">위치 선택</option>
                         {locations.map(location => (
-                          <option key={location.id} value={location.name}>
+                          <option key={location.name} value={location.name}>
                             {location.name}
                           </option>
                         ))}

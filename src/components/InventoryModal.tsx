@@ -227,7 +227,7 @@ export default function InventoryModal({
             >
               <option value="">제품을 선택하세요</option>
               {products.map((product, index) => (
-                <option key={product.id || `product-${index}`} value={product.name}>
+                <option key={product.name || `product-${index}`} value={product.name}>
                   {product.name} ({product.category?.name})
                 </option>
               ))}
