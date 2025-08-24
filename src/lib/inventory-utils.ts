@@ -4,8 +4,8 @@ import { Inventory } from '@/types'
 export interface GroupedInventoryItem {
   product_id: string
   location_id: string
-  product?: any
-  location?: any
+  product?: { name: string; category: { name: string } | null }
+  location?: { name: string }
   total_stock: number
   batch_count: number
   latest_updated: string

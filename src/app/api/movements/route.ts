@@ -131,11 +131,11 @@ export async function GET(request: NextRequest) {
       ...movement,
       product: movement.product ? {
         ...movement.product,
-        category: categories.find(c => c.name === movement.product.category_id)
-      } : null
+        category: categories.find(c => c.name === movement.product?.category_id)
+      } : undefined
     }))
 
-    const totalPages = Math.ceil(totalCount / limit)
+    const totalPages = Math.ceil((totalCount || 0) / limit)
 
     return NextResponse.json({
       success: true,

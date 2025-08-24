@@ -12,13 +12,17 @@ interface HeaderProps {
   onLogout: () => void
   viewMode: 'current' | 'monthly' | 'transactions'
   onViewModeChange: (mode: 'current' | 'monthly' | 'transactions') => void
+  showImages?: boolean
+  onToggleImages?: () => void
 }
 
 export default function Header({ 
   user, 
   onLogout, 
   viewMode, 
-  onViewModeChange
+  onViewModeChange,
+  showImages,
+  onToggleImages
 }: HeaderProps) {
   const { logout, updateUser } = useAuth()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)

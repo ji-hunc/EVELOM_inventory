@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
-import { InventoryMovement, Inventory, Product, Location } from '@/types'
+import { InventoryMovement, Inventory } from '@/types'
 import { 
   BarChart, 
   Bar, 
@@ -11,27 +11,19 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer, 
-  PieChart, 
-  Pie, 
-  Cell,
-  LineChart,
-  Line,
+  ResponsiveContainer,
   ComposedChart,
-  Area,
-  AreaChart
+  Area
 } from 'recharts'
 import { 
   TrendingUp, 
-  TrendingDown, 
   Package, 
   BarChart3, 
   AlertTriangle,
   Clock,
   DollarSign,
   Target,
-  Zap,
-  Calendar
+  Zap
 } from 'lucide-react'
 import Header from '@/components/Header'
 
@@ -41,14 +33,13 @@ interface StatsData {
   locationStats: { name: string; totalStock: number; itemCount: number; value: number }[]
   categoryStats: { name: string; totalStock: number; itemCount: number; turnoverRate: number }[]
   topMovingProducts: { name: string; category: string; totalMovement: number; locations: string[] }[]
-  slowMovingProducts: { name: string; category: string; lastMovement: string; daysIdle: number; currentStock: number }[]
+  slowMovingProducts: { name: string; category: string; lastMovement: string; daysIdle: number; currentStock: number; location: string; daysSinceLastMovement: number }[]
   stockTurnoverAnalysis: { category: string; turnoverRate: number; avgDaysToTurn: number }[]
   expiryAlerts: { name: string; batchCode: string; location: string; estimatedExpiry: string; daysLeft: number }[]
   seasonalTrends: { month: string; totalMovement: number; avgDaily: number }[]
   profitabilityAnalysis: { location: string; totalValue: number; movementRate: number; efficiency: number }[]
 }
 
-const COLORS = ['#22c55e', '#3b82f6', '#f97316', '#ef4444', '#8b5cf6', '#06b6d4']
 
 export default function StatsPage() {
   const { user, isLoading } = useAuth()
@@ -111,8 +102,8 @@ export default function StatsPage() {
 
       // 데이터 가공
       const processedData: StatsData = {
-        dailyInbound: processDailyData(allMovements.filter((m: any) => m.movement_type === 'in'), days),
-        dailyOutbound: processDailyData(allMovements.filter((m: any) => m.movement_type === 'out'), days),
+        dailyInbound: processDailyData(allMovements.filter((m: InventoryMovement) => m.movement_type === 'in'), days),
+        dailyOutbound: processDailyData(allMovements.filter((m: InventoryMovement) => m.movement_type === 'out'), days),
         locationStats: processLocationStats(inventory),
         categoryStats: processCategoryStats(inventory, allMovements),
         topMovingProducts: processTopMovingProducts(allMovements, inventory),
@@ -132,7 +123,7 @@ export default function StatsPage() {
     }
   }
 
-  const processDailyData = (movements: any[], days: number) => {
+  const processDailyData = (movements: InventoryMovement[], days: number) => {
     const dailyMap: Record<string, { count: number; value: number }> = {}
     
     for (let i = days - 1; i >= 0; i--) {
@@ -168,7 +159,7 @@ export default function StatsPage() {
     return 30000
   }
 
-  const processLocationStats = (inventory: any[]) => {
+  const processLocationStats = (inventory: Inventory[]) => {
     const locationMap: Record<string, { totalStock: number; itemCount: number; value: number }> = {}
     
     inventory.forEach(item => {
@@ -188,7 +179,7 @@ export default function StatsPage() {
     }))
   }
 
-  const processCategoryStats = (inventory: any[], movements: any[]) => {
+  const processCategoryStats = (inventory: Inventory[], movements: InventoryMovement[]) => {
     const categoryMap: Record<string, { totalStock: number; itemCount: number; movementCount: number }> = {}
     
     inventory.forEach(item => {
@@ -215,7 +206,7 @@ export default function StatsPage() {
     }))
   }
 
-  const processTopMovingProducts = (movements: any[], inventory: any[]) => {
+  const processTopMovingProducts = (movements: InventoryMovement[], inventory: Inventory[]) => {
     const productMap: Record<string, { totalMovement: number; locations: Set<string>; category: string }> = {}
     
     movements.forEach(movement => {
@@ -242,9 +233,9 @@ export default function StatsPage() {
       .slice(0, 8)
   }
 
-  const processSlowMovingProducts = (movements: any[], inventory: any[]) => {
+  const processSlowMovingProducts = (movements: InventoryMovement[], inventory: Inventory[]) => {
     const now = new Date()
-    const slowMoving: any[] = []
+    const slowMoving: { name: string; daysSinceLastMovement: number; currentStock: number; location: string; category: string }[] = []
     
     inventory.forEach(item => {
       const productMovements = movements.filter(m => m.product_id === item.product_id)
@@ -255,10 +246,12 @@ export default function StatsPage() {
           category: item.product?.category?.name || item.category?.name || '알 수 없음',
           lastMovement: '이동 기록 없음',
           daysIdle: 999,
-          currentStock: item.current_stock
+          currentStock: item.current_stock,
+          location: item.location?.name || '알 수 없음',
+          daysSinceLastMovement: 999
         })
       } else {
-        const lastMovement = productMovements.sort((a: any, b: any) => 
+        const lastMovement = productMovements.sort((a: InventoryMovement, b: InventoryMovement) => 
           new Date(b.movement_date).getTime() - new Date(a.movement_date).getTime()
         )[0]
         
@@ -270,7 +263,9 @@ export default function StatsPage() {
             category: item.product?.category?.name || item.category?.name || '알 수 없음',
             lastMovement: new Date(lastMovement.movement_date).toLocaleDateString('ko-KR'),
             daysIdle: daysSinceLastMovement,
-            currentStock: item.current_stock
+            currentStock: item.current_stock,
+            location: item.location?.name || '알 수 없음',
+            daysSinceLastMovement
           })
         }
       }
@@ -279,7 +274,7 @@ export default function StatsPage() {
     return slowMoving.sort((a, b) => b.daysIdle - a.daysIdle).slice(0, 8)
   }
 
-  const processStockTurnoverAnalysis = (inventory: any[], movements: any[]) => {
+  const processStockTurnoverAnalysis = (inventory: Inventory[], movements: InventoryMovement[]) => {
     const categoryAnalysis: Record<string, { totalStock: number; totalMovement: number }> = {}
     
     inventory.forEach(item => {
@@ -304,9 +299,9 @@ export default function StatsPage() {
     }))
   }
 
-  const processExpiryAlerts = (inventory: any[]) => {
+  const processExpiryAlerts = (inventory: Inventory[]) => {
     const now = new Date()
-    const alerts: any[] = []
+    const alerts: { product: string; location: string; batchCode: string; expiryDate: string; daysUntilExpiry: number; currentStock: number; status: string }[] = []
     
     inventory.forEach(item => {
       if (item.batch_code && item.batch_code.length >= 4) {
@@ -336,7 +331,7 @@ export default function StatsPage() {
     return alerts.sort((a, b) => a.daysLeft - b.daysLeft)
   }
 
-  const processSeasonalTrends = (movements: any[]) => {
+  const processSeasonalTrends = (movements: InventoryMovement[]) => {
     const monthlyData: Record<string, number> = {}
     
     movements.forEach(movement => {
@@ -356,7 +351,7 @@ export default function StatsPage() {
     }))
   }
 
-  const processProfitabilityAnalysis = (inventory: any[], movements: any[]) => {
+  const processProfitabilityAnalysis = (inventory: Inventory[], movements: InventoryMovement[]) => {
     const locationAnalysis: Record<string, { totalValue: number; movementCount: number }> = {}
     
     inventory.forEach(item => {
@@ -394,7 +389,6 @@ export default function StatsPage() {
     return null
   }
 
-  const totalStock = statsData.locationStats.reduce((sum, item) => sum + item.totalStock, 0)
   const totalValue = statsData.locationStats.reduce((sum, item) => sum + item.value, 0)
   const avgTurnover = statsData.stockTurnoverAnalysis.length > 0 
     ? statsData.stockTurnoverAnalysis.reduce((sum, item) => sum + item.turnoverRate, 0) / statsData.stockTurnoverAnalysis.length

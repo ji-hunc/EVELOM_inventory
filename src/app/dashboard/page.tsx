@@ -85,7 +85,7 @@ export default function Dashboard() {
       setIsDataLoading(true);
 
       console.log("Current user:", user);
-      console.log("User ID:", user?.id);
+      console.log("Username:", user?.username);
 
       // 임시 테스트: user가 없으면 테스트 사용자 생성
       if (!user) {

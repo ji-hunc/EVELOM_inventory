@@ -25,14 +25,14 @@ export async function getCurrentUser(request: NextRequest) {
   }
 }
 
-export function isReadOnlyUser(user: any): boolean {
+export function isReadOnlyUser(user: { role: string } | null): boolean {
   return user?.role === 'readonly'
 }
 
-export function canWrite(user: any): boolean {
+export function canWrite(user: { role: string } | null): boolean {
   return user?.role === 'master' || user?.role === 'general'
 }
 
-export function isMaster(user: any): boolean {
+export function isMaster(user: { role: string } | null): boolean {
   return user?.role === 'master'
 }

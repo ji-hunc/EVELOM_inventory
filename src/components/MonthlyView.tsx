@@ -9,7 +9,7 @@ interface MonthlyViewProps {
   products: Product[]
   locations: Location[]
   categories: Category[]
-  inventory: any[]
+  inventory: Inventory[]
 }
 
 interface DailyMovementData {

@@ -212,7 +212,7 @@ export default function TransactionView({
             </label>
             <select
               value={filters.movementType}
-              onChange={(e) => setFilters({ ...filters, movementType: e.target.value as any })}
+              onChange={(e) => setFilters({ ...filters, movementType: e.target.value as 'all' | 'in' | 'out' | 'adjustment' | 'transfer' })}
               className="select-field"
             >
               <option value="all">전체</option>

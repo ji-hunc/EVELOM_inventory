@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       .from('inventory')
       .select('*')
       .eq('product_id', product_id)
-      .eq('location_id', from_location_id)
+      .eq('location_id', from_location_id_id)
       .eq('batch_code', batch_code)
       .single()
 
@@ -65,13 +65,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. 도착 장소의 재고 확인 (없으면 생성)
-    const { data: toInventory, error: toInventoryError } = await supabaseAdmin
+    const { data: toInventoryResult, error: toInventoryError } = await supabaseAdmin
       .from('inventory')
       .select('*')
       .eq('product_id', product_id)
-      .eq('location_id', to_location_id)
+      .eq('location_id', to_location_id_id)
       .eq('batch_code', batch_code)
       .single()
+
+    let toInventory = toInventoryResult
 
     if (toInventoryError && toInventoryError.code === 'PGRST116') {
       // 도착 장소에 해당 제품의 재고가 없으면 생성
@@ -79,7 +81,7 @@ export async function POST(request: NextRequest) {
         .from('inventory')
         .insert({
           product_id,
-          location_id: to_location_id,
+          location_id: to_location_id_id,
           batch_code,
           current_stock: 0,
           last_updated: getKoreanTime(),
@@ -146,17 +148,17 @@ export async function POST(request: NextRequest) {
       .from('inventory_movements')
       .insert({
         product_id,
-        location_id: from_location_id,
+        location_id: from_location_id_id,
         batch_code,
         movement_type: 'transfer',
         quantity: -quantity, // 음수로 출발지 차감 표시
         previous_stock: fromInventory.current_stock,
         new_stock: fromInventory.current_stock - quantity,
         movement_date: movementDate,
-        notes: notes || `${to_location_id}로 이동`,
+        notes: notes || `${to_location_id_id}로 이동`,
         modified_by: username,
         transfer_group_id: transferGroupId,
-        to_location_id: to_location_id
+        to_location_id: to_location_id_id
       })
 
     if (outMovementError) {
@@ -168,17 +170,17 @@ export async function POST(request: NextRequest) {
       .from('inventory_movements')
       .insert({
         product_id,
-        location_id: to_location_id,
+        location_id: to_location_id_id,
         batch_code,
         movement_type: 'transfer',
         quantity, // 양수로 도착지 증가 표시
         previous_stock: toInventory.current_stock,
         new_stock: toInventory.current_stock + quantity,
         movement_date: movementDate,
-        notes: notes || `${from_location_id}에서 이동`,
+        notes: notes || `${from_location_id_id}에서 이동`,
         modified_by: username,
         transfer_group_id: transferGroupId,
-        from_location_id: from_location_id
+        from_location_id: from_location_id_id
       })
 
     if (inMovementError) {
@@ -187,7 +189,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `${product_id} ${quantity}개가 ${from_location_id}에서 ${to_location_id}로 이동되었습니다.`
+      message: `${product_id} ${quantity}개가 ${from_location_id_id}에서 ${to_location_id_id}로 이동되었습니다.`
     })
 
   } catch (error) {
